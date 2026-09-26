@@ -5,6 +5,7 @@ applemobiledeviceservice.exe
 applicationframehost.exe
 appprovisioningplugin.exe
 audiodg.exe
+autoupdate.exe
 backgroundtaskhost.exe
 brave.exe
 chrome.exe
@@ -100,6 +101,7 @@ tposd.exe
 udclientservice.exe
 udcuseragent.exe
 unsecapp.exe
+updater.exe
 usbipd.exe
 userssctrl.exe
 wininit.exe
