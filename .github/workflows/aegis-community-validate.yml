@@ -1,0 +1,57 @@
+name: aegis-community-validate
+
+on:
+  push:
+    branches: [main, aegis-community-staging]
+    paths:
+      - global_blacklist.txt
+      - global_whitelist.txt
+      - .github/workflows/scripts/validate_community_feeds.py
+      - .github/workflows/aegis-community-validate.yml
+  pull_request:
+    branches: [main, aegis-community-staging]
+    paths:
+      - global_blacklist.txt
+      - global_whitelist.txt
+      - .github/workflows/scripts/validate_community_feeds.py
+      - .github/workflows/aegis-community-validate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aegis-community-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate community feeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Validate global_blacklist.txt / global_whitelist.txt
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          args=(--root .)
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_REF" ]; then
+            args+=(--base-ref "origin/$PR_BASE_REF")
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE" ] \
+               && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            args+=(--base-ref "$PUSH_BEFORE")
+          fi
+          python .github/workflows/scripts/validate_community_feeds.py "${args[@]}"

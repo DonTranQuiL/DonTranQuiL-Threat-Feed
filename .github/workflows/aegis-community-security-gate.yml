@@ -1,0 +1,170 @@
+name: aegis-community-security-gate
+
+# Pull requests: contributors who are not OWNER / MEMBER / COLLABORATOR may only
+# touch global_blacklist.txt and global_whitelist.txt. For every PR, changed
+# files must not be binary or larger than MAX_BYTES, and added lines in the
+# list files must not look like URLs or scripts.
+# Pushes: only the list files' content is checked with the same rules (changed
+# paths are not restricted, so maintainers can push workflow changes).
+#
+# Uses plain `pull_request` (not `pull_request_target`): no secrets and a
+# read-only token, and nothing from the PR is executed besides this workflow.
+
+on:
+  pull_request:
+  push:
+    branches: [main, aegis-community-staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aegis-community-security-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Security gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Run security gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        shell: python
+        run: |
+          import os
+          import re
+          import subprocess
+          import sys
+
+          ALLOWED_PATHS = {"global_blacklist.txt", "global_whitelist.txt"}
+          LIST_FILES = sorted(ALLOWED_PATHS)
+          TRUSTED = {"OWNER", "MEMBER", "COLLABORATOR"}
+          MAX_BYTES = 2 * 1024 * 1024  # keep in sync with validate_community_feeds.py
+
+          SUSPICIOUS = [
+              (re.compile(r"[a-z][a-z0-9+.\-]*://", re.I), "URL"),
+              (re.compile(r"\bwww\.", re.I), "URL"),
+              (re.compile(r"^\s*(data|javascript|vbscript|file|mailto):", re.I), "URI scheme"),
+              (re.compile(r"<\s*/?\s*(script|iframe|object|embed|svg|img)\b|<\?php|#!\s*/", re.I),
+               "markup/script"),
+              (re.compile(r"\$\(|\$\{|`"), "shell substitution"),
+              (re.compile(r"&&|\|\||[;|<>{}]"), "shell/script operator"),
+              (re.compile(r"\b(eval|exec|system|import)\s*\(", re.I), "code call"),
+              (re.compile(r"\b(iex|invoke-expression|invoke-webrequest|downloadstring|"
+                          r"downloadfile|frombase64string|start-process|new-object)\b", re.I),
+               "PowerShell"),
+              (re.compile(r"\b(curl|wget|bash|sh|cmd|powershell|pwsh|python|certutil|"
+                          r"mshta|rundll32|regsvr32)(\.exe)?\s+[-/]", re.I),
+               "command line"),
+          ]
+
+          errors = []
+
+          def git(*args):
+              return subprocess.run(["git", *args], check=True, capture_output=True).stdout
+
+          def error(msg, path=None, line=None):
+              errors.append(msg)
+              loc = f" file={path}" + (f",line={line}" if line else "") if path else ""
+              print(f"::error{loc}::{msg}")
+
+          def check_line(path, lineno, text):
+              for pattern, label in SUSPICIOUS:
+                  if pattern.search(text):
+                      error(f"{label}-like content in list file: {text.strip()[:120]!r}",
+                            path, lineno)
+                      return
+
+          def check_blob(rev, path):
+              size = int(git("cat-file", "-s", f"{rev}:{path}").decode())
+              if size > MAX_BYTES:
+                  error(f"{path} is {size} bytes (limit {MAX_BYTES})", path)
+                  return None
+              data = git("cat-file", "blob", f"{rev}:{path}")
+              if b"\x00" in data:
+                  error(f"{path} is binary (contains NUL bytes)", path)
+                  return None
+              try:
+                  return data.decode("utf-8")
+              except UnicodeDecodeError:
+                  error(f"{path} is binary or not valid UTF-8 text", path)
+                  return None
+
+          event = os.environ["EVENT_NAME"]
+          if event == "pull_request":
+              base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+              assoc = os.environ.get("AUTHOR_ASSOCIATION", "")
+              fork = os.environ.get("HEAD_REPO") != os.environ["REPOSITORY"]
+              trusted = assoc in TRUSTED
+              print(f"PR author_association={assoc} fork={fork} trusted={trusted}")
+              rng = f"{base}...{head}"
+
+              status = git("diff", "--name-status", "--no-renames", "-z", rng).decode()
+              parts = status.split("\0")
+              changes = list(zip(parts[0:-1:2], parts[1::2]))
+              for st, path in changes:
+                  print(f"  {st} {path}")
+                  if path not in ALLOWED_PATHS and not trusted:
+                      error(f"'{path}' is outside the allowed paths "
+                            f"({', '.join(LIST_FILES)}); only maintainers may change it", path)
+
+              numstat = git("diff", "--numstat", "--no-renames", "-z", rng).decode()
+              for rec in numstat.split("\0"):
+                  if rec.startswith("-\t-\t"):
+                      error(f"binary file change: {rec[4:]}", rec[4:])
+
+              for st, path in changes:
+                  if st != "D":
+                      check_blob(head, path)
+
+              diff = git("diff", "-U0", "--no-color", rng, "--", *LIST_FILES).decode(
+                  "utf-8", "replace")
+              current, lineno = None, 0
+              for raw in diff.splitlines():
+                  if raw.startswith("+++ "):
+                      current = raw[6:] if raw.startswith("+++ b/") else None
+                  elif raw.startswith("@@"):
+                      m = re.search(r"\+(\d+)", raw)
+                      lineno = int(m.group(1)) if m else 0
+                  elif raw.startswith("+") and current:
+                      check_line(current, lineno, raw[1:])
+                      lineno += 1
+          else:
+              print(f"{event}: checking list file content at HEAD (paths not restricted)")
+              for path in LIST_FILES:
+                  if not os.path.exists(path):
+                      print(f"::warning::{path} not present")
+                      continue
+                  text = check_blob("HEAD", path)
+                  if text is not None:
+                      for n, line in enumerate(text.splitlines(), start=1):
+                          check_line(path, n, line)
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          verdict = "failed" if errors else "passed"
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write(f"## AEGIS security gate: {verdict}\n\n")
+                  for e in errors:
+                      fh.write(f"- {e}\n")
+          print(f"Security gate {verdict} with {len(errors)} error(s)")
+          sys.exit(1 if errors else 0)
