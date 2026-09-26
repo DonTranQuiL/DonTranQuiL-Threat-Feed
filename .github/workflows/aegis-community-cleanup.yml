@@ -1,97 +1,37 @@
-name: aegis-community-cleanup
-
-# Deletes the timestamped branches the AEGIS app creates on every push
-# (aegis-community-staging-<ts>, aegis-telemetry...). Only `main` and
-# `aegis-community-staging` are kept long-term. Branches that are the head or
-# base of an OPEN pull request, protected branches, and branches whose last
-# commit is younger than MIN_AGE_MINUTES (so the app has time to open its PR)
-# are never deleted.
+name: AEGIS Community Staging Cleanup
 
 on:
-  schedule:
-    - cron: "17 * * * *"
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Only log what would be deleted"
-        type: boolean
-        default: true
+  pull_request:
+    types:
+      - closed
 
 permissions:
   contents: write
-  pull-requests: read
-
-concurrency:
-  group: aegis-community-cleanup
-  cancel-in-progress: false
 
 jobs:
   cleanup:
-    name: Delete stale branches
+    name: Delete merged AEGIS staging branch
+
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(
+        github.event.pull_request.head.ref,
+        'aegis-community-staging'
+      )
+
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REPO: ${{ github.repository }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
-      KEEP_BRANCHES: "main aegis-community-staging"
-      MIN_AGE_MINUTES: "15"
+
     steps:
-      - name: Delete branches other than main / aegis-community-staging
+      - name: Delete merged staging branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+
         run: |
-          set -euo pipefail
-          echo "Repository: $REPO  dry_run=$DRY_RUN  keep=[$KEEP_BRANCHES]  min_age=${MIN_AGE_MINUTES}m"
+          echo "Deleting merged staging branch..."
 
-          branches_json=$(gh api --paginate "repos/$REPO/branches?per_page=100" | jq -s 'add // []')
-          # Heads (same-repo only) and bases of open PRs must survive.
-          open_prs_json=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" | jq -s 'add // []')
-          mapfile -t pr_branches < <(jq -r --arg repo "$REPO" '
-            .[] | ((select(.head.repo.full_name == $repo) | .head.ref), .base.ref)
-          ' <<<"$open_prs_json" | sort -u)
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/git/refs/heads/${{ github.event.pull_request.head.ref }}"
 
-          now=$(date -u +%s)
-          deleted=() skipped=() failed=()
-          while IFS=$'\t' read -r branch protected sha; do
-            keep=false
-            for k in $KEEP_BRANCHES; do [ "$branch" = "$k" ] && keep=true; done
-            if $keep; then continue; fi
-            if [ "$protected" = "true" ]; then
-              skipped+=("$branch (protected)"); continue
-            fi
-            if printf '%s\n' "${pr_branches[@]}" | grep -Fxq -- "$branch"; then
-              skipped+=("$branch (open pull request)"); continue
-            fi
-            committed=$(gh api "repos/$REPO/commits/$sha" --jq '.commit.committer.date')
-            age_min=$(( (now - $(date -u -d "$committed" +%s)) / 60 ))
-            if [ "$age_min" -lt "$MIN_AGE_MINUTES" ]; then
-              skipped+=("$branch (last commit ${age_min}m ago)"); continue
-            fi
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "[dry-run] would delete: $branch (last commit ${age_min}m ago)"
-              deleted+=("$branch"); continue
-            fi
-            ref_path=$(jq -rn --arg b "$branch" '$b | split("/") | map(@uri) | join("/")')
-            if gh api -X DELETE "repos/$REPO/git/refs/heads/$ref_path" >/dev/null; then
-              echo "deleted: $branch"
-              deleted+=("$branch")
-            else
-              echo "::warning::failed to delete $branch"
-              failed+=("$branch")
-            fi
-          done < <(jq -r '.[] | [.name, (.protected|tostring), .commit.sha] | @tsv' <<<"$branches_json")
-
-          for s in "${skipped[@]}"; do echo "skipped: $s"; done
-          verb=$([ "$DRY_RUN" = "true" ] && echo "Would delete" || echo "Deleted")
-          echo "$verb ${#deleted[@]} branch(es); skipped ${#skipped[@]}; failed ${#failed[@]}"
-
-          {
-            echo "## AEGIS branch cleanup$([ "$DRY_RUN" = "true" ] && echo ' (dry run)')"
-            echo
-            echo "**$verb ${#deleted[@]}** branch(es), skipped ${#skipped[@]}, failed ${#failed[@]}."
-            echo
-            for b in "${deleted[@]}"; do echo "- ${verb,,}: \`$b\`"; done
-            for s in "${skipped[@]}"; do echo "- skipped: \`$s\`"; done
-            for f in "${failed[@]}"; do echo "- **failed**: \`$f\`"; done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          [ "${#failed[@]}" -eq 0 ]
+          echo "Staging branch deleted."
