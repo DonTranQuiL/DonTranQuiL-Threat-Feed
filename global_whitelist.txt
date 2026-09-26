@@ -11,6 +11,7 @@ lsb.exe
 notepad++.exe
 privacyiconclient.exe
 ravcpl64.exe
+screenclippinghost.exe
 searchfilterhost.exe
 startallbackcfg.exe
 tailscale-ipn.exe
