@@ -1,43 +1,41 @@
 name: AEGIS Community Security Gate
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
     paths:
       - 'pending/**'
       - 'global_whitelist.txt'
       - 'global_blacklist.txt'
-      - '.github/scripts/validate_community_feed.py'
-      - '.github/workflows/aegis-community-security-gate.yml'
-  workflow_dispatch:
 
-# This workflow intentionally runs on pull_request, not pull_request_target.
-# PRs are treated as untrusted input. No repository secrets are exposed unless
-# the repository owner explicitly enables the optional reputation lookups below.
 permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  group: aegis-community-security-gate-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-env:
-  PYTHONUNBUFFERED: '1'
-  AEGIS_MAX_NEW_ENTRIES: '500'
-  AEGIS_MAX_TOTAL_FEED_LINES: '5000'
-  AEGIS_VT_MIN_DETECTIONS: '2'
-
 jobs:
   security-gate:
-    name: Validate + reputation gate
+    name: AEGIS Threat Feed Security Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - name: Checkout PR merge revision
+
+      # ------------------------------------------------------------
+      # IMPORTANT:
+      # Checkout the TRUSTED base/default branch.
+      #
+      # We intentionally DO NOT checkout the PR branch.
+      # The PR contents are inspected through git objects only.
+      # ------------------------------------------------------------
+
+      - name: Checkout trusted repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -45,72 +43,106 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate feed structure and changed entries
+      # ------------------------------------------------------------
+      # Fetch the PR commit as Git data.
+      #
+      # Nothing from the PR is executed.
+      # ------------------------------------------------------------
+
+      - name: Fetch pull request commit
         env:
-          AEGIS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          AEGIS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+
+          echo "Fetching PR commit:"
+          echo "$PR_SHA"
+
+          git fetch --no-tags --depth=1 origin "$PR_SHA"
+
+          echo "PR commit available for data comparison."
+
+      # ------------------------------------------------------------
+      # Structural validation
+      # ------------------------------------------------------------
+
+      - name: Validate complete production feed
         run: |
           python .github/scripts/validate_community_feed.py \
-            --base-sha "$AEGIS_BASE_SHA" \
-            --head-sha "$AEGIS_HEAD_SHA" \
-            --report "$RUNNER_TEMP/aegis-validation.json"
+            --base-sha "${{ github.event.pull_request.base.sha }}" \
+            --head-sha "${{ github.event.pull_request.head.sha }}"
 
-      - name: Reputation check — VirusTotal hashes
-        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+      # ------------------------------------------------------------
+      # VirusTotal reputation
+      #
+      # Only hashes are queried.
+      # No malware samples are uploaded.
+      # ------------------------------------------------------------
+
+      - name: VirusTotal reputation check
+        if: ${{ env.VIRUSTOTAL_API_KEY != '' }}
         env:
           VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
-          AEGIS_VT_MIN_DETECTIONS: ${{ env.AEGIS_VT_MIN_DETECTIONS }}
         run: |
           python .github/scripts/validate_community_feed.py \
-            --reputation virustotal \
-            --report "$RUNNER_TEMP/aegis-validation.json"
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --reputation virustotal
 
-      - name: Reputation check — MalwareBazaar hashes
-        if: ${{ secrets.MALWAREBAZAAR_AUTH_KEY != '' }}
+      - name: VirusTotal status
+        if: ${{ env.VIRUSTOTAL_API_KEY == '' }}
+        run: |
+          echo "::warning::VIRUSTOTAL_API_KEY is not configured."
+          echo "VirusTotal reputation checking will be skipped."
+
+      # ------------------------------------------------------------
+      # MalwareBazaar reputation
+      # ------------------------------------------------------------
+
+      - name: MalwareBazaar reputation check
+        if: ${{ env.MALWAREBAZAAR_AUTH_KEY != '' }}
         env:
           MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}
         run: |
           python .github/scripts/validate_community_feed.py \
-            --reputation malwarebazaar \
-            --report "$RUNNER_TEMP/aegis-validation.json"
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --reputation malwarebazaar
 
-      - name: Final security decision
-        env:
-          REPORT: ${{ runner.temp }}/aegis-validation.json
+      - name: MalwareBazaar status
+        if: ${{ env.MALWAREBAZAAR_AUTH_KEY == '' }}
+        run: |
+          echo "::warning::MALWAREBAZAAR_AUTH_KEY is not configured."
+          echo "MalwareBazaar reputation checking will be skipped."
+
+      # ------------------------------------------------------------
+      # Final deterministic decision
+      # ------------------------------------------------------------
+
+      - name: Final AEGIS security decision
         run: |
           python .github/scripts/validate_community_feed.py \
-            --finalize \
-            --report "$REPORT"
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --finalize
 
-      - name: Publish gate report
+      # ------------------------------------------------------------
+      # Human-readable summary
+      # ------------------------------------------------------------
+
+      - name: Security gate summary
         if: always()
-        env:
-          REPORT: ${{ runner.temp }}/aegis-validation.json
         run: |
-          if [ -f "$REPORT" ]; then
-            python - <<'PY'
-          import json, os
-          p = os.environ['REPORT']
-          data = json.load(open(p, encoding='utf-8'))
-          print('### AEGIS Community Security Gate')
-          print(f"- Decision: **{data.get('decision', 'UNKNOWN')}**")
-          print(f"- Changed additions inspected: **{data.get('changed_additions', 0)}**")
-          print(f"- Validation errors: **{len(data.get('errors', []))}**")
-          print(f"- Warnings: **{len(data.get('warnings', []))}**")
-          print(f"- Reputation checks: **{len(data.get('reputation', []))}**")
-          for item in data.get('errors', [])[:20]:
-              print(f"- ❌ {item}")
-          for item in data.get('warnings', [])[:20]:
-              print(f"- ⚠️ {item}")
-          PY
-          else
-            echo 'No AEGIS report was produced.'
-          fi
-
-      - name: Upload machine-readable gate report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: aegis-community-security-gate-report
-          path: ${{ runner.temp }}/aegis-validation.json
-          if-no-files-found: ignore
+          echo "=============================================="
+          echo "        AEGIS COMMUNITY SECURITY GATE"
+          echo "=============================================="
+          echo ""
+          echo "PR: #${{ github.event.pull_request.number }}"
+          echo "Repository: ${{ github.repository }}"
+          echo ""
+          echo "The security gate does NOT automatically merge"
+          echo "community intelligence."
+          echo ""
+          echo "Whitelist entries require human review."
+          echo "Blacklist entries require validation."
+          echo "Remote intelligence cannot silently override"
+          echo "local Sentinel policy."
+          echo ""
+          echo "=============================================="
