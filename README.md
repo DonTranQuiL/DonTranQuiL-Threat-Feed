@@ -1,6 +1,6 @@
-# DonTranQuiL-Thread-Feed
+# DonTranQuiL-Threat-Feed
 
-Shared thread feed configuration for DonTranQuiL projects.
+Shared threat feed configuration for DonTranQuiL projects.
 
 ## Files
 
