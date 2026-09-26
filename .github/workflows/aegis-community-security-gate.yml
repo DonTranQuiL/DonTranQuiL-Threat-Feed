@@ -87,14 +87,33 @@ jobs:
 
           echo "PR commit available for inspection."
 
+      # author_association reports CONTRIBUTOR for private org members,
+      # so look up the author's real permission. Any failure -> "none"
+      # (fail closed: non-feed changes are then rejected).
+      - name: Resolve PR author permission
+        id: author
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$PR_AUTHOR/permission" --jq .permission 2>/dev/null || true)"
+          case "$permission" in
+            admin|write|read) ;;
+            *) permission=none ;;
+          esac
+          echo "PR author $PR_AUTHOR has repository permission: $permission"
+          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+
       - name: Validate community feed
         env:
           PR_AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR_AUTHOR_PERMISSION: ${{ steps.author.outputs.permission }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --base-sha "${{ github.event.pull_request.base.sha }}" \
             --head-sha "${{ github.event.pull_request.head.sha }}" \
-            --author-association "$PR_AUTHOR_ASSOCIATION"
+            --author-association "$PR_AUTHOR_ASSOCIATION" \
+            --author-permission "$PR_AUTHOR_PERMISSION"
 
       # Always runs: without a key the script skips with a warning,
       # but whitelist hash additions then fail as unverified.

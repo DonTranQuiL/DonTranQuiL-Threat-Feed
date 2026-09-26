@@ -90,6 +90,15 @@ TRUSTED_ASSOCIATIONS = {
 }
 
 
+# author_association says CONTRIBUTOR for PRIVATE org members, so the
+# workflow also passes the author's real repository permission
+# (GET /repos/{repo}/collaborators/{user}/permission; maintain -> write).
+TRUSTED_PERMISSIONS = {
+    "admin",
+    "write",
+}
+
+
 # ============================================================
 # LIMITS
 # ============================================================
@@ -2185,6 +2194,11 @@ def phase_validate(
             or ""
         ).strip().upper()
 
+        permission = (
+            args.author_permission
+            or ""
+        ).strip().lower()
+
         listed = ", ".join(
             non_feed[:20]
         ) + (
@@ -2193,12 +2207,16 @@ def phase_validate(
             else ""
         )
 
-        if association in TRUSTED_ASSOCIATIONS:
+        if (
+            association in TRUSTED_ASSOCIATIONS
+            or permission in TRUSTED_PERMISSIONS
+        ):
 
             data["warnings"].append(
                 f"PR changes {len(non_feed)} file(s) "
                 "outside the community feed "
-                f"(author: {association}); "
+                f"(author: {association or 'UNKNOWN'}, "
+                f"permission: {permission or 'unknown'}); "
                 f"review them manually: {listed}"
             )
 
@@ -2208,7 +2226,8 @@ def phase_validate(
                 "PR changes files outside the "
                 "community feed; only repository "
                 "owners/members may do that "
-                f"(author: {association or 'UNKNOWN'}): "
+                f"(author: {association or 'UNKNOWN'}, "
+                f"permission: {permission or 'unknown'}): "
                 f"{listed}"
             )
 
@@ -2403,6 +2422,15 @@ def main():
         help=(
             "PR author association "
             "(OWNER, MEMBER, ...)"
+        ),
+    )
+
+    parser.add_argument(
+        "--author-permission",
+        default="",
+        help=(
+            "PR author repository permission "
+            "(admin, write, read, none)"
         ),
     )
 
