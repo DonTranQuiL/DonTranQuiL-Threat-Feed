@@ -25,16 +25,39 @@ jobs:
   security-gate:
     name: AEGIS Threat Feed Security Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+
+    # Sized for the worst case of a full lookup cap (120) on
+    # every provider with an empty cache:
+    #   CIRCL          120 x ~1 s          ~  2 min
+    #   VirusTotal     120 x 16 s (4/min)  ~ 32 min
+    #   MetaDefender   120 x ~1.5 s        ~  3 min (only if configured)
+    #   MalwareBazaar  120 x ~1.5 s        ~  3 min
+    #   setup / git                        ~  1 min
+    # = ~41 min. VirusTotal only sees hashes CIRCL does not know
+    # and cached answers are free, so real runs are shorter.
+    timeout-minutes: 50
+
+    # pull_request_target defaults to read-only cache. This job never
+    # executes PR code (trusted main checkout; the PR is only read via
+    # git), and the cache holds only API answers for validated hashes,
+    # so it may save the reputation cache.
+    cache-mode: write
 
     env:
       VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
       MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}
 
+      # Optional: MetaDefender Cloud is used only if this secret exists.
+      METADEFENDER_API_KEY: ${{ secrets.METADEFENDER_API_KEY }}
+
       # Free VirusTotal API: 4 lookups/minute, 500/day.
       AEGIS_VT_MIN_INTERVAL_SECONDS: '16'
       AEGIS_MB_MIN_INTERVAL_SECONDS: '1'
-      AEGIS_MAX_REPUTATION_LOOKUPS: '20'
+      AEGIS_CIRCL_MIN_INTERVAL_SECONDS: '0.5'
+      AEGIS_MD_MIN_INTERVAL_SECONDS: '1'
+
+      # Live lookups per provider per run: ~100 hashes fit in one run.
+      AEGIS_MAX_REPUTATION_LOOKUPS: '120'
 
     steps:
 
@@ -48,6 +71,15 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+
+      - name: Restore CIRCL reputation cache
+        id: circl-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-circl.json
+          key: aegis-reputation-circl-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-circl-
 
       - name: Restore VirusTotal reputation cache
         id: vt-cache
@@ -67,6 +99,16 @@ jobs:
           restore-keys: |
             aegis-reputation-malwarebazaar-
 
+      - name: Restore MetaDefender reputation cache
+        id: md-cache
+        if: ${{ env.METADEFENDER_API_KEY != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-metadefender.json
+          key: aegis-reputation-metadefender-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-metadefender-
+
       - name: Fetch pull request commit
         env:
           PR_SHA: ${{ github.event.pull_request.head.sha }}
@@ -81,17 +123,46 @@ jobs:
 
           echo "PR commit available for inspection."
 
+      # author_association reports CONTRIBUTOR for private org members,
+      # so look up the author's real permission. Any failure -> "none"
+      # (fail closed: non-feed changes are then rejected).
+      - name: Resolve PR author permission
+        id: author
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$PR_AUTHOR/permission" --jq .permission 2>/dev/null || true)"
+          case "$permission" in
+            admin|write|read) ;;
+            *) permission=none ;;
+          esac
+          echo "PR author $PR_AUTHOR has repository permission: $permission"
+          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+
       - name: Validate community feed
         env:
           PR_AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR_AUTHOR_PERMISSION: ${{ steps.author.outputs.permission }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --base-sha "${{ github.event.pull_request.base.sha }}" \
             --head-sha "${{ github.event.pull_request.head.sha }}" \
-            --author-association "$PR_AUTHOR_ASSOCIATION"
+            --author-association "$PR_AUTHOR_ASSOCIATION" \
+            --author-permission "$PR_AUTHOR_PERMISSION"
+
+      # No key needed. A hash CIRCL knows (NSRL, Windows builds, ...)
+      # is known-good and skips VirusTotal; CIRCL errors never count
+      # as known-good (the hash then needs VirusTotal).
+      - name: CIRCL hashlookup reputation check
+        run: |
+          python .github/scripts/validate_community_feed.py \
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --reputation circl \
+            --cache .aegis-cache/reputation-circl.json
 
       # Always runs: without a key the script skips with a warning,
-      # but whitelist hash additions then fail as unverified.
+      # but whitelist hashes CIRCL does not know then fail as unverified.
       - name: VirusTotal reputation check
         run: |
           python .github/scripts/validate_community_feed.py \
@@ -104,6 +175,15 @@ jobs:
         run: |
           echo "::warning::VIRUSTOTAL_API_KEY is not configured."
           echo "VirusTotal reputation checking is skipped."
+
+      # Optional: without METADEFENDER_API_KEY this is a silent no-op.
+      # With a key it is fail closed like the others.
+      - name: MetaDefender Cloud reputation check
+        run: |
+          python .github/scripts/validate_community_feed.py \
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --reputation metadefender \
+            --cache .aegis-cache/reputation-metadefender.json
 
       - name: MalwareBazaar reputation check
         run: |
@@ -121,6 +201,17 @@ jobs:
       # Saved even when the gate fails, so a re-run reuses every
       # answer already paid for. Content-hash key: unchanged cache
       # is not saved again.
+      - name: Save CIRCL reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-circl.json') != '' &&
+          steps.circl-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-circl-{0}', hashFiles('.aegis-cache/reputation-circl.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-circl.json
+          key: aegis-reputation-circl-${{ hashFiles('.aegis-cache/reputation-circl.json') }}
+
       - name: Save VirusTotal reputation cache
         if: >-
           always() &&
@@ -143,6 +234,17 @@ jobs:
           path: .aegis-cache/reputation-malwarebazaar.json
           key: aegis-reputation-malwarebazaar-${{ hashFiles('.aegis-cache/reputation-malwarebazaar.json') }}
 
+      - name: Save MetaDefender reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-metadefender.json') != '' &&
+          steps.md-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-metadefender-{0}', hashFiles('.aegis-cache/reputation-metadefender.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-metadefender.json
+          key: aegis-reputation-metadefender-${{ hashFiles('.aegis-cache/reputation-metadefender.json') }}
+
       - name: Final AEGIS security decision
         run: |
           python .github/scripts/validate_community_feed.py \
@@ -161,6 +263,8 @@ jobs:
           echo ""
           echo "Remote intelligence is advisory."
           echo "Whitelist entries require human review."
+          echo "Whitelist hashes must be known-good (CIRCL or"
+          echo "VirusTotal) and unknown to MalwareBazaar."
           echo "Blacklist entries require validation."
           echo "No automatic merge is performed."
           echo ""
