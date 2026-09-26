@@ -1,11 +1,15 @@
 altserver.exe
 apsdaemon.exe
 dsatray.exe
+imf.exe
+imftips.exe
 lenovovantage-(genericmessagingaddin).exe
 lms.exe
+lsb.exe
 notepad++.exe
 privacyiconclient.exe
 ravcpl64.exe
 searchfilterhost.exe
 startallbackcfg.exe
+tailscale-ipn.exe
 userssctrl.exe
