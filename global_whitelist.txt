@@ -8,6 +8,7 @@ audiodg.exe
 backgroundtaskhost.exe
 brave.exe
 chrome.exe
+configserviceagent.exe
 conhost.exe
 crashhelper.exe
 ctfmon.exe
@@ -59,6 +60,7 @@ opera.exe
 opera_crashreporter.exe
 operagx.exe
 powermgr.exe
+powershell.exe
 py.exe
 ravbg64.exe
 registry
