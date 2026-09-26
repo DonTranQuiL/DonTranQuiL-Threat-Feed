@@ -1,2 +1,6 @@
+altserver.exe
+apsdaemon.exe
+notepad++.exe
+ravcpl64.exe
 searchfilterhost.exe
 startallbackcfg.exe
