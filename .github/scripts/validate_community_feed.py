@@ -19,11 +19,29 @@ Security model:
      |
      +--> hash validation
      |
-     +--> VirusTotal lookup
+     +--> CIRCL hashlookup      (known-good catalogue, no key)
      |
-     +--> MalwareBazaar lookup
+     +--> VirusTotal lookup     (only hashes CIRCL does not know)
+     |
+     +--> MetaDefender Cloud    (optional: only if a key is set)
+     |
+     +--> MalwareBazaar lookup  (every hash: a hit is malware)
      |
      +--> deterministic PASS / FAIL
+
+Entry formats (one per line, "#" starts a comment):
+
+    name.exe                    filename only (low confidence)
+    <sha256>                    hash (sha1 / md5 accepted with a warning,
+                                never for the whitelist)
+    name.exe|<sha256>           filename pinned to one exact binary
+                                (kind "name_sha256"; the single "|" is
+                                the only place a "|" is ever accepted)
+
+A whitelist hash (bare or pinned) is approved only if it is
+known-good - found in CIRCL hashlookup, or found by VirusTotal
+with 0 malicious detections - AND MalwareBazaar (plus
+MetaDefender, when configured) checked it without a hit.
 
 Important:
 
@@ -32,6 +50,11 @@ Important:
 - Reputation lookups are throttled, capped per run and cached;
   anything that could not be checked fails closed.
 - Filename-only whitelist entries are considered low confidence.
+- A protected operating-system name is only accepted in the
+  whitelist when pinned to a SHA-256 that is verified known-good
+  (the hash pins the exact binary); high-risk "living off the
+  land" binaries (powershell.exe, cmd.exe, ...) are never
+  whitelisted, pinned or not.
 - Community intelligence never automatically becomes local trust.
 - Community intelligence never automatically kills a local process.
 """
@@ -90,6 +113,15 @@ TRUSTED_ASSOCIATIONS = {
 }
 
 
+# author_association says CONTRIBUTOR for PRIVATE org members, so the
+# workflow also passes the author's real repository permission
+# (GET /repos/{repo}/collaborators/{user}/permission; maintain -> write).
+TRUSTED_PERMISSIONS = {
+    "admin",
+    "write",
+}
+
+
 # ============================================================
 # LIMITS
 # ============================================================
@@ -115,6 +147,9 @@ MAX_NEW = int(
 # REPUTATION RATE LIMITS
 #
 # Free VirusTotal API: 4 lookups / minute, 500 / day.
+# CIRCL hashlookup: free, no key, best effort (be polite).
+# MetaDefender Cloud: daily limit per key (not-found hashes
+# count 1/5).
 # Anything we could not check is an ERROR (fail closed).
 # ============================================================
 
@@ -132,10 +167,45 @@ MB_MIN_INTERVAL = float(
     )
 )
 
+CIRCL_MIN_INTERVAL = float(
+    os.environ.get(
+        "AEGIS_CIRCL_MIN_INTERVAL_SECONDS",
+        "0.5",
+    )
+)
+
+MD_MIN_INTERVAL = float(
+    os.environ.get(
+        "AEGIS_MD_MIN_INTERVAL_SECONDS",
+        "1",
+    )
+)
+
+# Live lookups per provider per run (cache hits are free).
+# 120 fits a ~100-hash PR in one run.
 MAX_LOOKUPS = int(
     os.environ.get(
         "AEGIS_MAX_REPUTATION_LOOKUPS",
-        "20",
+        "120",
+    )
+)
+
+# A provider that keeps failing (outage, network) is stopped
+# after this many failures in a row, so a dead service cannot
+# burn the job timeout; the rest stays unchecked (fail closed).
+MAX_CONSECUTIVE_ERRORS = int(
+    os.environ.get(
+        "AEGIS_MAX_CONSECUTIVE_ERRORS",
+        "5",
+    )
+)
+
+# CIRCL "hashlookup:trust" (0-100, 50 = no opinion). Below this
+# a CIRCL hit does NOT count as known-good.
+CIRCL_MIN_TRUST = int(
+    os.environ.get(
+        "AEGIS_CIRCL_MIN_TRUST",
+        "50",
     )
 )
 
@@ -168,20 +238,52 @@ CACHE_TTL = {
     "found": 7 * 24 * 3600,
 }
 
+# Workflow order: circl -> virustotal -> metadefender ->
+# malwarebazaar -> finalize.
 REPUTATION_PROVIDERS = (
+    "circl",
     "virustotal",
+    "metadefender",
     "malwarebazaar",
 )
 
 PROVIDER_LABEL = {
+    "circl": "CIRCL hashlookup",
     "virustotal": "VirusTotal",
+    "metadefender": "MetaDefender Cloud",
     "malwarebazaar": "MalwareBazaar",
+}
+
+# Secret each provider needs (None: no key needed).
+PROVIDER_KEY_ENV = {
+    "circl": None,
+    "virustotal": "VIRUSTOTAL_API_KEY",
+    "metadefender": "METADEFENDER_API_KEY",
+    "malwarebazaar": "MALWAREBAZAAR_AUTH_KEY",
+}
+
+# Used only when its key is configured; skipped silently
+# otherwise. Once configured it is fail closed like the rest.
+OPTIONAL_PROVIDERS = {
+    "metadefender",
 }
 
 HASH_KINDS = {
     "sha256",
     "sha1",
     "md5",
+}
+
+# MetaDefender scan_all_result_i values meaning "bad"
+# (1 Infected/Known, 8 Blocklisted, 38 Known Bad).
+MD_BAD_RESULTS = {
+    1,
+    8,
+    38,
+}
+
+MD_SUSPICIOUS_RESULTS = {
+    2,
 }
 
 
@@ -203,6 +305,44 @@ MD5_RE = re.compile(
     r"^(?:md5:)?([0-9a-f]{32})$",
     re.I,
 )
+
+
+# ============================================================
+# HASH-PINNED FILENAME ("name.exe|<sha256>")
+#
+# Exactly one "|", no whitespace around it, a filename on the
+# left (checked with the normal name rules) and a SHA-256 on
+# the right. Every other "|" stays forbidden.
+# ============================================================
+
+NAME_SHA256_SEPARATOR = "|"
+
+
+def split_name_sha256(value: str):
+    """Return (name, sha256) for a pinned entry, else None."""
+
+    if value.count(NAME_SHA256_SEPARATOR) != 1:
+        return None
+
+    name, _, digest = value.partition(
+        NAME_SHA256_SEPARATOR
+    )
+
+    match = SHA256_RE.fullmatch(
+        digest
+    )
+
+    if (
+        not match
+        or not name
+        or name != name.strip()
+    ):
+        return None
+
+    return (
+        name.lower(),
+        match.group(1).lower(),
+    )
 
 
 # ============================================================
@@ -434,6 +574,14 @@ def feed_lines(
 # ============================================================
 
 def classify(value: str):
+    pinned = split_name_sha256(value)
+
+    if pinned:
+        return (
+            "name_sha256",
+            f"{pinned[0]}{NAME_SHA256_SEPARATOR}{pinned[1]}",
+        )
+
     match = SHA256_RE.fullmatch(value)
 
     if match:
@@ -461,6 +609,67 @@ def classify(value: str):
     return (
         "name",
         value,
+    )
+
+
+def value_indicator(value: str):
+    """Hash a feed value is looked up by (None for names)."""
+
+    kind, normalized = classify(value)
+
+    if kind in HASH_KINDS:
+        return normalized
+
+    if kind == "name_sha256":
+        return split_name_sha256(normalized)[1]
+
+    return None
+
+
+def reputation_indicator(item: dict):
+    """Hash to look up for a report entry (None for names).
+
+    Always derived from the normalized value, never from a
+    stored field, so a report cannot smuggle another hash in.
+    """
+
+    kind = item.get("kind")
+
+    if kind in HASH_KINDS:
+        return item.get("normalized")
+
+    if kind == "name_sha256":
+
+        pinned = split_name_sha256(
+            str(item.get("normalized", ""))
+        )
+
+        return pinned[1] if pinned else None
+
+    return None
+
+
+def reputation_kind(item: dict):
+    """Hash algorithm of an entry's indicator."""
+
+    return (
+        "sha256"
+        if item.get("kind") == "name_sha256"
+        else item.get("kind")
+    )
+
+
+def is_protected_name(name: str) -> bool:
+
+    base = (
+        name.rsplit(".", 1)[0]
+        if "." in name
+        else name
+    )
+
+    return (
+        name in PROTECTED_NAMES
+        or base in PROTECTED_NAMES
     )
 
 
@@ -502,10 +711,23 @@ def validate_entry(
 
     # --------------------------------------------------------
     # Path / wildcard / rule injection
+    #
+    # A hash-pinned entry ("name|sha256") may contain its ONE
+    # separator; its name part still gets the full check.
     # --------------------------------------------------------
 
+    pinned = split_name_sha256(
+        value
+    )
+
+    checked_text = (
+        pinned[0]
+        if pinned
+        else value
+    )
+
     if any(
-        token in value
+        token in checked_text
         for token in FORBIDDEN_SUBSTRINGS
     ):
         data["errors"].append(
@@ -527,83 +749,173 @@ def validate_entry(
 
     if kind == "name":
 
-        if not NAME_RE.fullmatch(
-            normalized
-        ):
-            data["errors"].append(
-                f"{where}: invalid community "
-                f"identifier: {value!r}"
-            )
-
-            return False
-
-        # Get executable base name.
-        base = (
-            normalized.rsplit(".", 1)[0]
-            if "." in normalized
-            else normalized
+        return check_name(
+            normalized,
+            value,
+            feed_type,
+            where,
+            data,
         )
 
-        # ----------------------------------------------------
-        # Protected operating-system names
-        # ----------------------------------------------------
+    # --------------------------------------------------------
+    # Filename pinned to a SHA-256
+    # --------------------------------------------------------
 
-        if (
-            normalized in PROTECTED_NAMES
-            or base in PROTECTED_NAMES
-        ):
-            data["errors"].append(
-                f"{where}: protected "
-                f"operating-system identifier: "
-                f"{value!r}"
-            )
+    if kind == "name_sha256":
 
-            return False
-
-        # ----------------------------------------------------
-        # Suspicious whitelist names
-        # ----------------------------------------------------
-
-        if (
-            feed_type == "whitelist"
-            and normalized in SUSPICIOUS_WL_NAMES
-        ):
-            data["errors"].append(
-                f"{where}: high-risk executable "
-                f"cannot be promoted to whitelist "
-                f"by name alone: {value!r}"
-            )
-
-            return False
-
-        # ----------------------------------------------------
-        # Filename-only whitelist warning
-        # ----------------------------------------------------
-
-        if feed_type == "whitelist":
-            data["warnings"].append(
-                f"{where}: filename-only whitelist "
-                f"entry has no cryptographic identity: "
-                f"{value!r}"
-            )
+        return check_name(
+            pinned[0],
+            value,
+            feed_type,
+            where,
+            data,
+            pinned=True,
+        )
 
     # --------------------------------------------------------
     # Hash
     # --------------------------------------------------------
 
-    else:
+    if kind in {
+        "sha1",
+        "md5",
+    }:
+        data["warnings"].append(
+            f"{where}: {kind.upper()} is accepted "
+            f"for compatibility; SHA-256 is preferred"
+        )
 
-        if kind == "sha256":
-            pass
+    return True
 
-        elif kind in {
-            "sha1",
-            "md5",
-        }:
-            data["warnings"].append(
-                f"{where}: {kind.upper()} is accepted "
-                f"for compatibility; SHA-256 is preferred"
+
+def check_name(
+    name: str,
+    value: str,
+    feed_type: str,
+    where: str,
+    data: dict,
+    pinned: bool = False,
+):
+    """Filename rules, for name-only and hash-pinned entries."""
+
+    if not NAME_RE.fullmatch(
+        name
+    ):
+        data["errors"].append(
+            f"{where}: invalid community "
+            f"identifier: {value!r}"
+        )
+
+        return False
+
+    protected = is_protected_name(
+        name
+    )
+
+    high_risk = (
+        feed_type == "whitelist"
+        and name in SUSPICIOUS_WL_NAMES
+    )
+
+    # --------------------------------------------------------
+    # Hash-pinned: "name.exe|<sha256>"
+    # --------------------------------------------------------
+
+    if pinned:
+
+        if classify(name)[0] != "name":
+
+            data["errors"].append(
+                f"{where}: hash-pinned entry needs a "
+                f"filename left of '|': {value!r}"
             )
+
+            return False
+
+        # The GENUINE binary is what attackers abuse, so a
+        # hash does not make these safe to trust.
+        if high_risk:
+
+            data["errors"].append(
+                f"{where}: high-risk executable "
+                f"cannot be promoted to whitelist, "
+                f"even pinned to a SHA-256: {value!r}"
+            )
+
+            return False
+
+        # Never let a remote rule target a critical OS
+        # process for blocking; a bare SHA-256 entry can
+        # still blacklist the malicious file itself.
+        if (
+            protected
+            and feed_type != "whitelist"
+        ):
+
+            data["errors"].append(
+                f"{where}: protected "
+                f"operating-system identifier "
+                f"cannot be blacklisted by name, "
+                f"even pinned to a SHA-256 (use a "
+                f"bare SHA-256 entry): {value!r}"
+            )
+
+            return False
+
+        # Whitelist: the hash pins the exact binary, so a
+        # masquerading file with the same name does NOT
+        # match. Approved only if the hash is verified
+        # known-good (checked again in --finalize).
+        if protected:
+
+            data["warnings"].append(
+                f"{where}: protected operating-system "
+                f"name pinned to a SHA-256; approved only "
+                f"if that exact hash is verified "
+                f"known-good (CIRCL hashlookup, or "
+                f"VirusTotal with 0 malicious and 0 "
+                f"suspicious) and MalwareBazaar has no "
+                f"hit: {value!r}"
+            )
+
+        return True
+
+    # --------------------------------------------------------
+    # Protected operating-system names
+    # --------------------------------------------------------
+
+    if protected:
+        data["errors"].append(
+            f"{where}: protected "
+            f"operating-system identifier: "
+            f"{value!r}"
+        )
+
+        return False
+
+    # --------------------------------------------------------
+    # Suspicious whitelist names
+    # --------------------------------------------------------
+
+    if high_risk:
+        data["errors"].append(
+            f"{where}: high-risk executable "
+            f"cannot be promoted to whitelist "
+            f"by name alone: {value!r}"
+        )
+
+        return False
+
+    # --------------------------------------------------------
+    # Filename-only whitelist warning
+    # --------------------------------------------------------
+
+    if feed_type == "whitelist":
+        data["warnings"].append(
+            f"{where}: filename-only whitelist "
+            f"entry has no cryptographic identity: "
+            f"{value!r}"
+        )
 
     return True
 
@@ -711,6 +1023,31 @@ def collect_all(
         data["errors"].append(
             "identifier exists in BOTH "
             f"production feeds: {conflict!r}"
+        )
+
+    # Same binary trusted and blocked, e.g. "a.exe|<h>" in the
+    # whitelist and "<h>" in the blacklist.
+    whitelist_hashes = {
+        value_indicator(value)
+        for value in whitelist_values
+    } - {None}
+
+    blacklist_hashes = {
+        value_indicator(value)
+        for value in blacklist_values
+    } - {None}
+
+    for digest in sorted(
+        whitelist_hashes
+        & blacklist_hashes
+    ):
+
+        if digest in conflicts:
+            continue
+
+        data["errors"].append(
+            "hash exists in BOTH "
+            f"production feeds: {digest}"
         )
 
     return total
@@ -945,28 +1282,16 @@ def changed_additions(
 
 
 # ============================================================
-# VIRUSTOTAL
+# HTTP (hash-only GET/POST, JSON answer)
 # ============================================================
 
-def vt_lookup(
-    sha256: str,
-    api_key: str,
+USER_AGENT = "AEGIS-Threat-Feed-Security-Gate"
+
+
+def http_json(
+    request,
 ):
-
-    url = (
-        "https://www.virustotal.com/api/v3/files/"
-        + urllib.parse.quote(
-            sha256
-        )
-    )
-
-    request = urllib.request.Request(
-        url,
-        headers={
-            "x-apikey": api_key,
-            "accept": "application/json",
-        },
-    )
+    """Return (HTTP status, parsed JSON | {"error": text})."""
 
     try:
 
@@ -1001,6 +1326,95 @@ def vt_lookup(
                 "error": body,
             },
         )
+
+
+# ============================================================
+# CIRCL HASHLOOKUP (no key; 200 = known, 404 = unknown)
+# https://hashlookup.circl.lu/lookup/<md5|sha1|sha256>/<hash>
+# ============================================================
+
+def circl_lookup(
+    indicator: str,
+    kind: str = "sha256",
+):
+
+    url = (
+        "https://hashlookup.circl.lu/lookup/"
+        + urllib.parse.quote(
+            kind
+        )
+        + "/"
+        + urllib.parse.quote(
+            indicator
+        )
+    )
+
+    return http_json(
+        urllib.request.Request(
+            url,
+            headers={
+                "accept": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        )
+    )
+
+
+# ============================================================
+# VIRUSTOTAL
+# ============================================================
+
+def vt_lookup(
+    sha256: str,
+    api_key: str,
+):
+
+    url = (
+        "https://www.virustotal.com/api/v3/files/"
+        + urllib.parse.quote(
+            sha256
+        )
+    )
+
+    return http_json(
+        urllib.request.Request(
+            url,
+            headers={
+                "x-apikey": api_key,
+                "accept": "application/json",
+            },
+        )
+    )
+
+
+# ============================================================
+# METADEFENDER CLOUD (OPSWAT) - optional
+# GET https://api.metadefender.com/v4/hash/<hash>, header
+# "apikey". 404 + code 404003 = hash not found.
+# ============================================================
+
+def md_lookup(
+    indicator: str,
+    api_key: str,
+):
+
+    url = (
+        "https://api.metadefender.com/v4/hash/"
+        + urllib.parse.quote(
+            indicator
+        )
+    )
+
+    return http_json(
+        urllib.request.Request(
+            url,
+            headers={
+                "apikey": api_key,
+                "accept": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        )
+    )
 
 
 # ============================================================
@@ -1019,50 +1433,18 @@ def mb_lookup(
         }
     ).encode()
 
-    request = urllib.request.Request(
-        "https://mb-api.abuse.ch/api/v1/",
-        headers={
-            "Auth-Key": auth_key,
-            "Content-Type":
-                "application/x-www-form-urlencoded",
-        },
-        data=payload,
-        method="POST",
-    )
-
-    try:
-
-        with urllib.request.urlopen(
-            request,
-            timeout=20,
-        ) as response:
-
-            return (
-                response.status,
-                json.loads(
-                    response.read().decode(
-                        "utf-8",
-                        errors="strict",
-                    )
-                ),
-            )
-
-    except urllib.error.HTTPError as exc:
-
-        body = (
-            exc.read()
-            .decode(
-                "utf-8",
-                errors="replace",
-            )[:500]
-        )
-
-        return (
-            exc.code,
-            {
-                "error": body,
+    return http_json(
+        urllib.request.Request(
+            "https://mb-api.abuse.ch/api/v1/",
+            headers={
+                "Auth-Key": auth_key,
+                "Content-Type":
+                    "application/x-www-form-urlencoded",
             },
+            data=payload,
+            method="POST",
         )
+    )
 
 
 # ============================================================
@@ -1077,10 +1459,14 @@ def throttle(
 ):
     """Sleep until the provider's minimum interval has passed."""
 
-    interval = (
-        VT_MIN_INTERVAL
-        if provider == "virustotal"
-        else MB_MIN_INTERVAL
+    interval = {
+        "circl": CIRCL_MIN_INTERVAL,
+        "virustotal": VT_MIN_INTERVAL,
+        "metadefender": MD_MIN_INTERVAL,
+        "malwarebazaar": MB_MIN_INTERVAL,
+    }.get(
+        provider,
+        MB_MIN_INTERVAL,
     )
 
     last = LAST_CALL.get(
@@ -1181,6 +1567,57 @@ def cache_entry_valid(
                 or value < 0
             ):
                 return False
+
+    if (
+        provider == "circl"
+        and status == "found"
+    ):
+
+        trust = record.get(
+            "trust"
+        )
+
+        if (
+            not isinstance(
+                record.get("known_malicious"),
+                bool,
+            )
+            or (
+                trust is not None
+                and (
+                    not isinstance(trust, int)
+                    or isinstance(trust, bool)
+                )
+            )
+        ):
+            return False
+
+    if (
+        provider == "metadefender"
+        and status == "found"
+    ):
+
+        detected = record.get(
+            "detected"
+        )
+
+        result_code = record.get(
+            "result"
+        )
+
+        if (
+            not isinstance(detected, int)
+            or isinstance(detected, bool)
+            or detected < 0
+            or (
+                result_code is not None
+                and (
+                    not isinstance(result_code, int)
+                    or isinstance(result_code, bool)
+                )
+            )
+        ):
+            return False
 
     return True
 
@@ -1414,6 +1851,288 @@ def vt_record(
     return record
 
 
+def as_int(
+    value,
+):
+    """int(value) for JSON numbers / digit strings, else None."""
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(value)
+
+    if (
+        isinstance(value, str)
+        and value.strip().isdigit()
+    ):
+        return int(value.strip())
+
+    return None
+
+
+CIRCL_HASH_FIELD = {
+    "sha256": "SHA-256",
+    "sha1": "SHA-1",
+    "md5": "MD5",
+}
+
+
+def circl_record(
+    key_id: str,
+    status,
+    body,
+):
+
+    body = body if isinstance(body, dict) else {}
+
+    record = {
+        "provider":
+            "circl",
+        "indicator":
+            key_id,
+    }
+
+    kind = classify(key_id)[0]
+
+    if status == 404:
+
+        record["status"] = "not_found"
+
+    elif status in {
+        429,
+        503,
+    }:
+
+        record["status"] = "rate_limited"
+        record["http"] = status
+
+    elif status != 200:
+
+        record["status"] = "error"
+        record["http"] = status
+
+        if body.get("error"):
+            record["detail"] = str(
+                body["error"]
+            )[:180]
+
+    else:
+
+        reported = str(
+            body.get(
+                CIRCL_HASH_FIELD.get(kind, "SHA-256"),
+                "",
+            )
+        ).strip().lower()
+
+        # A 200 must describe exactly the hash we asked for.
+        if reported != key_id:
+
+            record["status"] = "error"
+            record["detail"] = (
+                "response does not match the "
+                "requested hash"
+            )
+
+        else:
+
+            record.update(
+                {
+                    "status":
+                        "found",
+                    "trust":
+                        as_int(
+                            body.get(
+                                "hashlookup:trust"
+                            )
+                        ),
+                    "known_malicious":
+                        bool(
+                            body.get(
+                                "KnownMalicious"
+                            )
+                        ),
+                    "filename":
+                        str(
+                            body.get(
+                                "FileName"
+                            )
+                            or ""
+                        )[:160],
+                    "source":
+                        str(
+                            body.get(
+                                "source"
+                            )
+                            or ""
+                        )[:80],
+                }
+            )
+
+    return record
+
+
+def md_record(
+    key_id: str,
+    status,
+    body,
+):
+
+    body = body if isinstance(body, dict) else {}
+
+    record = {
+        "provider":
+            "metadefender",
+        "indicator":
+            key_id,
+    }
+
+    error_text = str(
+        body.get(
+            "error",
+            "",
+        )
+    )
+
+    if status == 404:
+
+        # Only "the hash was not found" is a definitive
+        # answer; any other 404 (wrong endpoint) is not.
+        if (
+            "404003" in error_text
+            or "hash was not found"
+            in error_text.lower()
+        ):
+            record["status"] = "not_found"
+
+        else:
+            record["status"] = "error"
+            record["http"] = status
+            record["detail"] = error_text[:180]
+
+    elif status == 429:
+
+        record["status"] = "rate_limited"
+        record["http"] = status
+
+    elif status in {
+        401,
+        403,
+    }:
+
+        record["status"] = "auth_error"
+        record["http"] = status
+
+    elif status != 200:
+
+        record["status"] = "error"
+        record["http"] = status
+
+        if error_text:
+            record["detail"] = error_text[:180]
+
+    elif body.get("error"):
+
+        record["status"] = "error"
+        record["detail"] = error_text[:180]
+
+    else:
+
+        scan = body.get(
+            "scan_results"
+        )
+
+        scan = scan if isinstance(scan, dict) else {}
+
+        record.update(
+            {
+                "status":
+                    "found",
+                "result":
+                    as_int(
+                        scan.get(
+                            "scan_all_result_i"
+                        )
+                    ),
+                "detected":
+                    max(
+                        as_int(
+                            scan.get(
+                                "total_detected_avs"
+                            )
+                        )
+                        or 0,
+                        0,
+                    ),
+            }
+        )
+
+    return record
+
+
+def make_record(
+    provider: str,
+    key_id: str,
+    status,
+    body,
+):
+
+    if provider == "circl":
+        return circl_record(key_id, status, body)
+
+    if provider == "virustotal":
+        return vt_record(key_id, status, body)
+
+    if provider == "metadefender":
+        return md_record(key_id, status, body)
+
+    return mb_record(key_id, status, body)
+
+
+def circl_counts_as_known_good(
+    record: dict,
+) -> bool:
+    """A definitive CIRCL hit that vouches for the file."""
+
+    if (
+        record.get("provider") != "circl"
+        or record.get("status") != "found"
+        or record.get("known_malicious")
+    ):
+        return False
+
+    trust = record.get(
+        "trust"
+    )
+
+    # CIRCL always sends a trust level; 50 = "no opinion"
+    # (catalogued in one source) is the documented default.
+    if trust is None:
+        trust = 50
+
+    return trust >= CIRCL_MIN_TRUST
+
+
+def circl_known_good(
+    indicator: str,
+    data: dict,
+) -> bool:
+    """True if this run's CIRCL phase vouched for the hash."""
+
+    return any(
+        record.get("indicator") == indicator
+        and circl_counts_as_known_good(record)
+        for record in data.get(
+            "reputation",
+            [],
+        )
+    )
+
+
 def mb_record(
     key_id: str,
     status,
@@ -1618,6 +2337,110 @@ def judge_record(
             )
 
     # =================================================
+    # CIRCL HASHLOOKUP
+    # =================================================
+
+    elif record["provider"] == "circl":
+
+        trust = record.get(
+            "trust"
+        )
+
+        if record.get("known_malicious"):
+
+            if feed_type == "whitelist":
+
+                data["errors"].append(
+                    "CIRCL hashlookup: whitelist "
+                    "hash is flagged KnownMalicious: "
+                    f"{key_id}"
+                )
+
+            else:
+
+                data["warnings"].append(
+                    "CIRCL hashlookup corroborates "
+                    "blacklist hash (KnownMalicious): "
+                    f"{key_id}"
+                )
+
+        elif feed_type == "whitelist":
+
+            if not circl_counts_as_known_good(
+                record
+            ):
+
+                data["warnings"].append(
+                    "CIRCL hashlookup: whitelist hash "
+                    f"has low trust ({trust} < "
+                    f"{CIRCL_MIN_TRUST}); not counted "
+                    f"as known-good: {key_id}"
+                )
+
+        else:
+
+            data["warnings"].append(
+                "CIRCL hashlookup catalogues "
+                "blacklist hash as a known file "
+                f"(source: {record.get('source') or '?'}, "
+                f"trust: {trust}); possible false "
+                f"positive - review: {key_id}"
+            )
+
+    # =================================================
+    # METADEFENDER CLOUD
+    # =================================================
+
+    elif record["provider"] == "metadefender":
+
+        detected = record.get(
+            "detected",
+            0,
+        )
+
+        result_code = record.get(
+            "result"
+        )
+
+        bad = (
+            result_code in MD_BAD_RESULTS
+            or detected >= 1
+        )
+
+        if (
+            feed_type == "whitelist"
+            and bad
+        ):
+
+            data["errors"].append(
+                "MetaDefender Cloud: whitelist "
+                f"hash flagged ({detected} engine "
+                f"detections, result {result_code}): "
+                f"{key_id}"
+            )
+
+        elif (
+            feed_type == "whitelist"
+            and result_code in MD_SUSPICIOUS_RESULTS
+        ):
+
+            data["warnings"].append(
+                "MetaDefender Cloud: whitelist "
+                f"hash is suspicious: {key_id}"
+            )
+
+        elif (
+            feed_type == "blacklist"
+            and bad
+        ):
+
+            data["warnings"].append(
+                "MetaDefender Cloud corroborates "
+                f"blacklist hash ({detected} engine "
+                f"detections): {key_id}"
+            )
+
+    # =================================================
     # MALWAREBAZAAR
     # =================================================
 
@@ -1651,17 +2474,34 @@ def mark_unchecked(
     reason: str,
     data: dict,
 ):
-    """An unchecked hash is NEVER approved (fail closed)."""
+    """An unchecked hash is NEVER approved (fail closed).
 
-    data["errors"].append(
-        f"{PROVIDER_LABEL[provider]} reputation "
-        f"check incomplete for "
-        f"{item['feed_type']} hash "
-        f"{item['normalized']}: {reason}; "
-        "NOT approved - re-run the gate "
-        "(cached results are reused) or "
-        "review manually"
-    )
+    CIRCL is the exception: an unanswered CIRCL lookup simply
+    does not vouch for the hash, which then needs VirusTotal
+    (and fails there if VirusTotal cannot verify it).
+    """
+
+    if provider == "circl":
+
+        data["warnings"].append(
+            f"{PROVIDER_LABEL[provider]} check "
+            f"incomplete for {item['feed_type']} "
+            f"hash {item['normalized']}: {reason}; "
+            "not counted as known-good - "
+            "VirusTotal must verify it"
+        )
+
+    else:
+
+        data["errors"].append(
+            f"{PROVIDER_LABEL[provider]} reputation "
+            f"check incomplete for "
+            f"{item['feed_type']} hash "
+            f"{item['normalized']}: {reason}; "
+            "NOT approved - re-run the gate "
+            "(cached results are reused) or "
+            "review manually"
+        )
 
     data["reputation"].append(
         {
@@ -1681,6 +2521,60 @@ def mark_unchecked(
 # REPUTATION ENGINE
 # ============================================================
 
+def reputation_items(
+    data: dict,
+):
+    """One lookup item per (hash, feed type).
+
+    Bare hashes and the hash part of "name|sha256" entries
+    are looked up alike.
+    """
+
+    items = []
+
+    seen = set()
+
+    for item in data.get(
+        "entries",
+        [],
+    ):
+
+        indicator = reputation_indicator(
+            item
+        )
+
+        if not indicator:
+            continue
+
+        marker = (
+            indicator,
+            item["feed_type"],
+        )
+
+        if marker in seen:
+            continue
+
+        seen.add(marker)
+
+        items.append(
+            {
+                "feed_type":
+                    item["feed_type"],
+                "kind":
+                    reputation_kind(item),
+                "normalized":
+                    indicator,
+                "value":
+                    item.get(
+                        "value",
+                        indicator,
+                    ),
+            }
+        )
+
+    return items
+
+
 def run_reputation(
     provider: str,
     data: dict,
@@ -1696,50 +2590,55 @@ def run_reputation(
 
     label = PROVIDER_LABEL[provider]
 
+    runs = data.setdefault(
+        "reputation_runs",
+        {},
+    )
+
     # --------------------------------------------------------
     # Only hash indicators (one per hash + feed type)
     # --------------------------------------------------------
 
-    hashes = []
-
-    seen = set()
-
-    for item in data.get(
-        "entries",
-        [],
-    ):
-
-        if item["kind"] not in HASH_KINDS:
-            continue
-
-        marker = (
-            item["normalized"],
-            item["feed_type"],
-        )
-
-        if marker in seen:
-            continue
-
-        seen.add(marker)
-
-        hashes.append(item)
+    hashes = reputation_items(
+        data
+    )
 
     # --------------------------------------------------------
     # API key
     # --------------------------------------------------------
 
-    env_name = (
-        "VIRUSTOTAL_API_KEY"
-        if provider == "virustotal"
-        else "MALWAREBAZAAR_AUTH_KEY"
+    env_name = PROVIDER_KEY_ENV[
+        provider
+    ]
+
+    key = (
+        os.environ.get(
+            env_name,
+            "",
+        ).strip()
+        if env_name
+        else ""
     )
 
-    key = os.environ.get(
-        env_name,
-        "",
-    ).strip()
+    if env_name and not key:
 
-    if not key:
+        runs[provider] = {
+            "configured": False,
+            "lookups": 0,
+            "cache_hits": 0,
+            "cap": MAX_LOOKUPS,
+            "stopped": None,
+        }
+
+        # Optional provider: skipped silently, never fails.
+        if provider in OPTIONAL_PROVIDERS:
+
+            print(
+                f"{label}: {env_name} is not set; "
+                "optional provider skipped"
+            )
+
+            return
 
         data["warnings"].append(
             f"{label} check skipped: "
@@ -1747,16 +2646,29 @@ def run_reputation(
         )
 
         # Unverified whitelist hashes are never approved.
+        # (VirusTotal is not needed for hashes CIRCL
+        # already vouched for.)
         for item in hashes:
 
-            if item["feed_type"] == "whitelist":
+            if item["feed_type"] != "whitelist":
+                continue
 
-                mark_unchecked(
-                    provider,
-                    item,
-                    f"{env_name} is not configured",
+            if (
+                provider == "virustotal"
+                and item["kind"] == "sha256"
+                and circl_known_good(
+                    item["normalized"],
                     data,
                 )
+            ):
+                continue
+
+            mark_unchecked(
+                provider,
+                item,
+                f"{env_name} is not configured",
+                data,
+            )
 
         return
 
@@ -1765,6 +2677,15 @@ def run_reputation(
     # --------------------------------------------------------
 
     if not hashes:
+
+        runs[provider] = {
+            "configured": True,
+            "lookups": 0,
+            "cache_hits": 0,
+            "cap": MAX_LOOKUPS,
+            "stopped": None,
+        }
+
         return
 
     cache, cache_dirty = cache_load(
@@ -1778,6 +2699,10 @@ def run_reputation(
     lookups = 0
 
     cache_hits = 0
+
+    skipped_known = 0
+
+    failures_in_row = 0
 
     for item in hashes:
 
@@ -1813,6 +2738,35 @@ def run_reputation(
                     "VirusTotal skipped non-SHA256 "
                     f"indicator: {key_id}"
                 )
+
+            continue
+
+        # ----------------------------------------------------
+        # CIRCL already vouches for it: no VirusTotal quota.
+        # ----------------------------------------------------
+
+        if (
+            provider == "virustotal"
+            and circl_known_good(
+                key_id,
+                data,
+            )
+        ):
+
+            skipped_known += 1
+
+            data["reputation"].append(
+                {
+                    "provider":
+                        provider,
+                    "indicator":
+                        key_id,
+                    "status":
+                        "skipped",
+                    "reason":
+                        "known-good in CIRCL hashlookup",
+                }
+            )
 
             continue
 
@@ -1876,9 +2830,23 @@ def run_reputation(
 
             try:
 
-                if provider == "virustotal":
+                if provider == "circl":
+
+                    status, body = circl_lookup(
+                        key_id,
+                        item["kind"],
+                    )
+
+                elif provider == "virustotal":
 
                     status, body = vt_lookup(
+                        key_id,
+                        key,
+                    )
+
+                elif provider == "metadefender":
+
+                    status, body = md_lookup(
                         key_id,
                         key,
                     )
@@ -1907,18 +2875,11 @@ def run_reputation(
 
             LAST_CALL[provider] = time.monotonic()
 
-            record = (
-                vt_record(
-                    key_id,
-                    status,
-                    body,
-                )
-                if provider == "virustotal"
-                else mb_record(
-                    key_id,
-                    status,
-                    body,
-                )
+            record = make_record(
+                provider,
+                key_id,
+                status,
+                body,
             )
 
             if record["status"] in CACHE_TTL:
@@ -1931,6 +2892,12 @@ def run_reputation(
                 )
 
                 cache_dirty = True
+
+                failures_in_row = 0
+
+            elif record["status"] == "error":
+
+                failures_in_row += 1
 
         answers[key_id] = record
 
@@ -1993,6 +2960,19 @@ def run_reputation(
                 data,
             )
 
+            # A dead service must not burn the job timeout.
+            if (
+                failures_in_row
+                >= MAX_CONSECUTIVE_ERRORS
+                and not stopped
+            ):
+
+                stopped = (
+                    f"{label} failed {failures_in_row} "
+                    "lookups in a row; no further "
+                    f"{label} calls in this run"
+                )
+
             continue
 
         data["reputation"].append(
@@ -2012,14 +2992,15 @@ def run_reputation(
             cache,
         )
 
-    data.setdefault(
-        "reputation_runs",
-        {},
-    )[provider] = {
+    runs[provider] = {
+        "configured":
+            True,
         "lookups":
             lookups,
         "cache_hits":
             cache_hits,
+        "skipped_known_good":
+            skipped_known,
         "cap":
             MAX_LOOKUPS,
         "stopped":
@@ -2034,6 +3015,17 @@ def run_reputation(
 def verify_whitelist_hashes(
     data: dict,
 ):
+    """Every whitelist hash must be positively known-good.
+
+    known-good = found in CIRCL hashlookup (trust >= minimum,
+    not flagged), OR found by VirusTotal with 0 malicious,
+    completed analysis and suspicious within the limit (0 for
+    a protected OS name pinned to the hash).
+
+    Always required: MalwareBazaar answered (a hit is already
+    an error). VirusTotal is required when CIRCL does not vouch
+    for the hash; MetaDefender when its key was configured.
+    """
 
     errors = data.setdefault(
         "errors",
@@ -2045,25 +3037,58 @@ def verify_whitelist_hashes(
         [],
     )
 
-    seen = set()
+    runs = data.get(
+        "reputation_runs",
+        {},
+    ) or {}
+
+    md_required = bool(
+        (
+            runs.get(
+                "metadefender",
+            )
+            or {}
+        ).get(
+            "configured"
+        )
+    )
+
+    # indicator -> {"kind", "protected"}
+    whitelist_hashes = {}
 
     for item in data.get(
         "entries",
         [],
     ):
 
-        if (
-            item.get("feed_type") != "whitelist"
-            or item.get("kind") not in HASH_KINDS
-        ):
+        if item.get("feed_type") != "whitelist":
             continue
 
-        key_id = item["normalized"]
+        key_id = reputation_indicator(
+            item
+        )
 
-        if key_id in seen:
+        if not key_id:
             continue
 
-        seen.add(key_id)
+        info = whitelist_hashes.setdefault(
+            key_id,
+            {
+                "kind": reputation_kind(item),
+                "protected": False,
+            },
+        )
+
+        if item.get("kind") == "name_sha256":
+
+            name = split_name_sha256(
+                item["normalized"]
+            )[0]
+
+            if is_protected_name(name):
+                info["protected"] = True
+
+    for key_id, info in whitelist_hashes.items():
 
         # Already failing with a more specific reason.
         if any(
@@ -2072,22 +3097,63 @@ def verify_whitelist_hashes(
         ):
             continue
 
-        records = [
-            record
-            for record in reputation
-            if record.get("indicator") == key_id
-        ]
+        if info["kind"] != "sha256":
 
-        checked = {
-            record.get("provider")
-            for record in records
-            if record.get("status") in CACHE_TTL
+            errors.append(
+                f"whitelist hash {key_id} is "
+                f"{str(info['kind']).upper()}; whitelist "
+                "hash entries must be SHA-256"
+            )
+
+            continue
+
+        definitive = {}
+
+        for record in reputation:
+
+            if (
+                record.get("indicator") == key_id
+                and record.get("status") in CACHE_TTL
+            ):
+                definitive[
+                    record.get("provider")
+                ] = record
+
+        circl_ok = circl_counts_as_known_good(
+            definitive.get("circl") or {}
+        )
+
+        vt = definitive.get(
+            "virustotal"
+        ) or {}
+
+        vt_ok = (
+            vt.get("status") == "found"
+            and vt.get("malicious", 0) == 0
+            and vt.get("engines", 0) > 0
+            and vt.get("suspicious", 0)
+            <= (
+                0
+                if info["protected"]
+                else VT_MAX_SUSPICIOUS
+            )
+        )
+
+        required = {
+            "malwarebazaar",
         }
+
+        if not circl_ok:
+            required.add("virustotal")
+
+        if md_required:
+            required.add("metadefender")
 
         missing = [
             PROVIDER_LABEL[provider]
             for provider in REPUTATION_PROVIDERS
-            if provider not in checked
+            if provider in required
+            and provider not in definitive
         ]
 
         if missing:
@@ -2098,15 +3164,23 @@ def verify_whitelist_hashes(
                 "unverified hashes are never approved"
             )
 
-        elif not any(
-            record.get("status") == "found"
-            for record in records
+        elif not (
+            circl_ok
+            or vt_ok
         ):
 
             errors.append(
                 f"whitelist hash {key_id} is unknown "
-                "to every reputation provider "
-                "(not_found); it cannot be trusted "
+                "to every reputation provider that "
+                "can vouch for it (CIRCL hashlookup, "
+                "VirusTotal with 0 detections"
+                + (
+                    " and 0 suspicious for a protected "
+                    "OS name"
+                    if info["protected"]
+                    else ""
+                )
+                + "); it cannot be trusted "
                 "automatically - manual review required"
             )
 
@@ -2185,6 +3259,15 @@ def phase_validate(
             or ""
         ).strip().upper()
 
+        permission = (
+            getattr(
+                args,
+                "author_permission",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
         listed = ", ".join(
             non_feed[:20]
         ) + (
@@ -2193,12 +3276,16 @@ def phase_validate(
             else ""
         )
 
-        if association in TRUSTED_ASSOCIATIONS:
+        if (
+            association in TRUSTED_ASSOCIATIONS
+            or permission in TRUSTED_PERMISSIONS
+        ):
 
             data["warnings"].append(
                 f"PR changes {len(non_feed)} file(s) "
                 "outside the community feed "
-                f"(author: {association}); "
+                f"(author: {association or 'UNKNOWN'}, "
+                f"permission: {permission or 'unknown'}); "
                 f"review them manually: {listed}"
             )
 
@@ -2208,7 +3295,8 @@ def phase_validate(
                 "PR changes files outside the "
                 "community feed; only repository "
                 "owners/members may do that "
-                f"(author: {association or 'UNKNOWN'}): "
+                f"(author: {association or 'UNKNOWN'}, "
+                f"permission: {permission or 'unknown'}): "
                 f"{listed}"
             )
 
@@ -2377,10 +3465,9 @@ def main():
 
     parser.add_argument(
         "--reputation",
-        choices=[
-            "virustotal",
-            "malwarebazaar",
-        ],
+        choices=list(
+            REPUTATION_PROVIDERS
+        ),
     )
 
     parser.add_argument(
@@ -2403,6 +3490,15 @@ def main():
         help=(
             "PR author association "
             "(OWNER, MEMBER, ...)"
+        ),
+    )
+
+    parser.add_argument(
+        "--author-permission",
+        default="",
+        help=(
+            "PR author repository permission "
+            "(admin, write, read, none)"
         ),
     )
 
@@ -2461,9 +3557,16 @@ def main():
 
         print(
             f"{args.reputation}: "
-            f"checked; "
+            + (
+                "skipped (key not configured); "
+                if stats.get("configured") is False
+                else "checked; "
+            )
+            +
             f"lookups={stats.get('lookups', 0)}, "
             f"cache_hits={stats.get('cache_hits', 0)}, "
+            f"skipped_known_good="
+            f"{stats.get('skipped_known_good', 0)}, "
             f"errors="
             f"{len(data['errors'])}, "
             f"warnings="
