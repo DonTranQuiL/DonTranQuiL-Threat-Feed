@@ -22,15 +22,11 @@ jobs:
     name: AEGIS Threat Feed Security Gate
     runs-on: ubuntu-latest
 
-    steps:
+    env:
+      VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+      MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}
 
-      # ------------------------------------------------------------
-      # IMPORTANT:
-      # Checkout the TRUSTED base/default branch.
-      #
-      # We intentionally DO NOT checkout the PR branch.
-      # The PR contents are inspected through git objects only.
-      # ------------------------------------------------------------
+    steps:
 
       - name: Checkout trusted repository
         uses: actions/checkout@v4
@@ -43,12 +39,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      # ------------------------------------------------------------
-      # Fetch the PR commit as Git data.
-      #
-      # Nothing from the PR is executed.
-      # ------------------------------------------------------------
-
       - name: Fetch pull request commit
         env:
           PR_SHA: ${{ github.event.pull_request.head.sha }}
@@ -60,72 +50,45 @@ jobs:
 
           git fetch --no-tags --depth=1 origin "$PR_SHA"
 
-          echo "PR commit available for data comparison."
+          echo "PR commit available for inspection."
 
-      # ------------------------------------------------------------
-      # Structural validation
-      # ------------------------------------------------------------
-
-      - name: Validate complete production feed
+      - name: Validate community feed
         run: |
           python .github/scripts/validate_community_feed.py \
             --base-sha "${{ github.event.pull_request.base.sha }}" \
             --head-sha "${{ github.event.pull_request.head.sha }}"
 
-      # ------------------------------------------------------------
-      # VirusTotal reputation
-      #
-      # Only hashes are queried.
-      # No malware samples are uploaded.
-      # ------------------------------------------------------------
-
       - name: VirusTotal reputation check
         if: ${{ env.VIRUSTOTAL_API_KEY != '' }}
-        env:
-          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --report "$RUNNER_TEMP/aegis-validation.json" \
             --reputation virustotal
 
-      - name: VirusTotal status
+      - name: VirusTotal not configured
         if: ${{ env.VIRUSTOTAL_API_KEY == '' }}
         run: |
           echo "::warning::VIRUSTOTAL_API_KEY is not configured."
-          echo "VirusTotal reputation checking will be skipped."
-
-      # ------------------------------------------------------------
-      # MalwareBazaar reputation
-      # ------------------------------------------------------------
+          echo "VirusTotal reputation checking is skipped."
 
       - name: MalwareBazaar reputation check
         if: ${{ env.MALWAREBAZAAR_AUTH_KEY != '' }}
-        env:
-          MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --report "$RUNNER_TEMP/aegis-validation.json" \
             --reputation malwarebazaar
 
-      - name: MalwareBazaar status
+      - name: MalwareBazaar not configured
         if: ${{ env.MALWAREBAZAAR_AUTH_KEY == '' }}
         run: |
           echo "::warning::MALWAREBAZAAR_AUTH_KEY is not configured."
-          echo "MalwareBazaar reputation checking will be skipped."
-
-      # ------------------------------------------------------------
-      # Final deterministic decision
-      # ------------------------------------------------------------
+          echo "MalwareBazaar reputation checking is skipped."
 
       - name: Final AEGIS security decision
         run: |
           python .github/scripts/validate_community_feed.py \
             --report "$RUNNER_TEMP/aegis-validation.json" \
             --finalize
-
-      # ------------------------------------------------------------
-      # Human-readable summary
-      # ------------------------------------------------------------
 
       - name: Security gate summary
         if: always()
@@ -137,12 +100,9 @@ jobs:
           echo "PR: #${{ github.event.pull_request.number }}"
           echo "Repository: ${{ github.repository }}"
           echo ""
-          echo "The security gate does NOT automatically merge"
-          echo "community intelligence."
-          echo ""
+          echo "Remote intelligence is advisory."
           echo "Whitelist entries require human review."
           echo "Blacklist entries require validation."
-          echo "Remote intelligence cannot silently override"
-          echo "local Sentinel policy."
+          echo "No automatic merge is performed."
           echo ""
           echo "=============================================="
