@@ -1,6 +1,7 @@
 altserver.exe
 apsdaemon.exe
 dsatray.exe
+idlescheduleeventaction.exe
 imf.exe
 imftips.exe
 lenovovantage-(genericmessagingaddin).exe
