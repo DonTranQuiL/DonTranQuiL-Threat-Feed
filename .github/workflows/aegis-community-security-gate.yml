@@ -27,6 +27,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # pull_request_target defaults to read-only cache. This job never
+    # executes PR code (trusted main checkout; the PR is only read via
+    # git), and the cache holds only API answers for validated hashes,
+    # so it may save the reputation cache.
+    cache-mode: write
+
     env:
       VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
       MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}

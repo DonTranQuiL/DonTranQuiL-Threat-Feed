@@ -1,0 +1,5 @@
+# actionlint v1.7.12 predates GitHub's `cache-mode` key (2026-09-10).
+paths:
+  .github/workflows/aegis-community-security-gate.yml:
+    ignore:
+      - 'unexpected key "cache-mode" for "job" section'
