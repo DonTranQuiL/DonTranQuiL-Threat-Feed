@@ -6,10 +6,8 @@ identity_helper.exe
 idlescheduleeventaction.exe
 imf.exe
 imftips.exe
-lenovovantage-(genericmessagingaddin).exe
 lms.exe
 lsb.exe
-notepad++.exe
 openwith.exe
 privacyiconclient.exe
 ravcpl64.exe
