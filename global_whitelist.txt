@@ -1,5 +1,6 @@
 altserver.exe
 apsdaemon.exe
+dataexchangehost.exe
 dsatray.exe
 idlescheduleeventaction.exe
 imf.exe
