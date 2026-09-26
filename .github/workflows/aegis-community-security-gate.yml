@@ -8,36 +8,64 @@ on:
       - reopened
       - ready_for_review
 
-    paths:
-      - 'pending/**'
-      - 'global_whitelist.txt'
-      - 'global_blacklist.txt'
+    # No paths filter: this check is REQUIRED on main, so it must
+    # report on every PR. PRs without feed changes need no API calls
+    # and finish in seconds; non-feed changes by non-members fail.
 
 permissions:
   contents: read
   pull-requests: read
 
+# A newer push to the same PR cancels the old run (saves API quota).
+concurrency:
+  group: aegis-security-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   security-gate:
     name: AEGIS Threat Feed Security Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     env:
       VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
       MALWAREBAZAAR_AUTH_KEY: ${{ secrets.MALWAREBAZAAR_AUTH_KEY }}
 
+      # Free VirusTotal API: 4 lookups/minute, 500/day.
+      AEGIS_VT_MIN_INTERVAL_SECONDS: '16'
+      AEGIS_MB_MIN_INTERVAL_SECONDS: '1'
+      AEGIS_MAX_REPUTATION_LOOKUPS: '20'
+
     steps:
 
       - name: Checkout trusted repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+
+      - name: Restore VirusTotal reputation cache
+        id: vt-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-virustotal.json
+          key: aegis-reputation-virustotal-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-virustotal-
+
+      - name: Restore MalwareBazaar reputation cache
+        id: mb-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-malwarebazaar.json
+          key: aegis-reputation-malwarebazaar-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-malwarebazaar-
 
       - name: Fetch pull request commit
         env:
@@ -48,22 +76,28 @@ jobs:
           echo "Fetching PR commit:"
           echo "$PR_SHA"
 
-          git fetch --no-tags --depth=1 origin "$PR_SHA"
+          # Full history so the merge base with main is known.
+          git fetch --no-tags origin "$PR_SHA"
 
           echo "PR commit available for inspection."
 
       - name: Validate community feed
+        env:
+          PR_AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --base-sha "${{ github.event.pull_request.base.sha }}" \
-            --head-sha "${{ github.event.pull_request.head.sha }}"
+            --head-sha "${{ github.event.pull_request.head.sha }}" \
+            --author-association "$PR_AUTHOR_ASSOCIATION"
 
+      # Always runs: without a key the script skips with a warning,
+      # but whitelist hash additions then fail as unverified.
       - name: VirusTotal reputation check
-        if: ${{ env.VIRUSTOTAL_API_KEY != '' }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --report "$RUNNER_TEMP/aegis-validation.json" \
-            --reputation virustotal
+            --reputation virustotal \
+            --cache .aegis-cache/reputation-virustotal.json
 
       - name: VirusTotal not configured
         if: ${{ env.VIRUSTOTAL_API_KEY == '' }}
@@ -72,17 +106,42 @@ jobs:
           echo "VirusTotal reputation checking is skipped."
 
       - name: MalwareBazaar reputation check
-        if: ${{ env.MALWAREBAZAAR_AUTH_KEY != '' }}
         run: |
           python .github/scripts/validate_community_feed.py \
             --report "$RUNNER_TEMP/aegis-validation.json" \
-            --reputation malwarebazaar
+            --reputation malwarebazaar \
+            --cache .aegis-cache/reputation-malwarebazaar.json
 
       - name: MalwareBazaar not configured
         if: ${{ env.MALWAREBAZAAR_AUTH_KEY == '' }}
         run: |
           echo "::warning::MALWAREBAZAAR_AUTH_KEY is not configured."
           echo "MalwareBazaar reputation checking is skipped."
+
+      # Saved even when the gate fails, so a re-run reuses every
+      # answer already paid for. Content-hash key: unchanged cache
+      # is not saved again.
+      - name: Save VirusTotal reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-virustotal.json') != '' &&
+          steps.vt-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-virustotal-{0}', hashFiles('.aegis-cache/reputation-virustotal.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-virustotal.json
+          key: aegis-reputation-virustotal-${{ hashFiles('.aegis-cache/reputation-virustotal.json') }}
+
+      - name: Save MalwareBazaar reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-malwarebazaar.json') != '' &&
+          steps.mb-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-malwarebazaar-{0}', hashFiles('.aegis-cache/reputation-malwarebazaar.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-malwarebazaar.json
+          key: aegis-reputation-malwarebazaar-${{ hashFiles('.aegis-cache/reputation-malwarebazaar.json') }}
 
       - name: Final AEGIS security decision
         run: |
