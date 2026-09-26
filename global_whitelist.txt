@@ -2,6 +2,7 @@ altserver.exe
 apsdaemon.exe
 dataexchangehost.exe
 dsatray.exe
+identity_helper.exe
 idlescheduleeventaction.exe
 imf.exe
 imftips.exe
@@ -13,6 +14,7 @@ privacyiconclient.exe
 ravcpl64.exe
 screenclippinghost.exe
 searchfilterhost.exe
+setup.exe
 startallbackcfg.exe
 tailscale-ipn.exe
 userssctrl.exe
