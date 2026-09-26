@@ -1,382 +1,1495 @@
 #!/usr/bin/env python3
-"""Validate the DonTranQuiL Sentinel // AEGIS community definition feeds.
+"""
+AEGIS Community Intelligence Security Gate.
 
-Checks ``global_blacklist.txt`` and ``global_whitelist.txt``:
+Designed for:
+    DonTranQuiL-Threat-Feed
 
-* UTF-8 encoding, no NUL / control / bidi-override characters
-* every entry is a SHA-256 hash (64 hex chars) or a safe file name
-* no duplicate entries within a file (case-insensitive)
-* no entry present in both the blacklist and the whitelist
-* file size / line count sanity limits
-* warnings (non-fatal) for whitelisted critical Windows system names
+Security model:
 
-Syntax: one entry per line, optional trailing `` # comment``, lines starting
-with ``#`` are comments, blank lines are ignored.
+    PR
+     |
+     +--> structural validation
+     |
+     +--> duplicate detection
+     |
+     +--> protected-name detection
+     |
+     +--> whitelist poisoning checks
+     |
+     +--> hash validation
+     |
+     +--> VirusTotal lookup
+     |
+     +--> MalwareBazaar lookup
+     |
+     +--> deterministic PASS / FAIL
 
-Usage::
+Important:
 
-    python validate_community_feed.py [--root PATH] [--base-ref REF]
-
-Emits GitHub Actions ``::error`` / ``::warning`` annotations, writes a Markdown
-summary to ``$GITHUB_STEP_SUMMARY`` when set and exits non-zero on errors.
-Python 3 standard library only.
+- This script NEVER uploads malware samples.
+- Reputation lookups are hash-only.
+- Filename-only whitelist entries are considered low confidence.
+- Community intelligence never automatically becomes local trust.
+- Community intelligence never automatically kills a local process.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
-import unicodedata
-from dataclasses import dataclass, field
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
-BLACKLIST = "global_blacklist.txt"
-WHITELIST = "global_whitelist.txt"
-FEED_FILES = (BLACKLIST, WHITELIST)
 
-MAX_FILE_BYTES = 2 * 1024 * 1024  # 2 MiB (keep in sync with the security gate)
-MAX_LINES = 100_000
-MAX_NAME_LENGTH = 255
+# ============================================================
+# PATHS
+# ============================================================
 
-SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
-# Something made only of hex digits and long enough to be meant as a hash
-# (MD5 = 32, SHA-1 = 40, ...), but not a valid SHA-256.
-HASHLIKE_RE = re.compile(r"^[0-9a-fA-F]{32,}$")
-# Allowed file-name characters: ASCII letters, digits, and a small set of
-# punctuation that is common in real executable names and harmless in paths.
-SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9._\-+() \[\]&,~!@]+$")
-# Windows reserved device names (with or without an extension).
-RESERVED_NAMES = {
-    "con", "prn", "aux", "nul",
-    *(f"com{i}" for i in range(1, 10)),
-    *(f"lpt{i}" for i in range(1, 10)),
-}
-# Characters used for file-name spoofing (e.g. "gpj.exe" shown as "exe.jpg").
-BIDI_CONTROLS = set("\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+ROOT = Path(__file__).resolve().parents[2]
 
-# Critical Windows binaries that malware frequently impersonates. Whitelisting
-# them by *name* would let any file with that name bypass detection.
-CRITICAL_SYSTEM_NAMES = {
-    "svchost.exe", "explorer.exe", "lsass.exe", "lsaiso.exe", "csrss.exe",
-    "winlogon.exe", "wininit.exe", "services.exe", "smss.exe", "spoolsv.exe",
-    "rundll32.exe", "regsvr32.exe", "dllhost.exe", "taskhost.exe",
-    "taskhostw.exe", "conhost.exe", "powershell.exe", "pwsh.exe",
-    "powershell_ise.exe", "cmd.exe", "wscript.exe", "cscript.exe",
-    "mshta.exe", "msiexec.exe", "schtasks.exe", "taskmgr.exe", "wmic.exe",
-    "wmiprvse.exe", "certutil.exe", "bitsadmin.exe", "sihost.exe",
-    "runtimebroker.exe", "dwm.exe", "ctfmon.exe", "fontdrvhost.exe",
-    "system", "registry", "msmpeng.exe", "searchindexer.exe",
-    "installutil.exe", "regasm.exe", "regsvcs.exe", "msbuild.exe",
-}
-# Generic names shipped by countless unrelated (and malicious) installers.
-GENERIC_NAMES = {
-    "setup.exe", "install.exe", "installer.exe", "update.exe",
-    "updater.exe", "autoupdate.exe", "launcher.exe", "app.exe", "run.exe",
-    "start.exe", "service.exe", "helper.exe",
+REPORT_DEFAULT = (
+    Path(os.environ.get("RUNNER_TEMP", "."))
+    / "aegis-validation.json"
+)
+
+
+FEEDS = {
+    "whitelist": ROOT / "global_whitelist.txt",
+    "blacklist": ROOT / "global_blacklist.txt",
+
+    "pending_whitelist":
+        ROOT / "pending" / "community_whitelist_candidates.txt",
+
+    "pending_blacklist":
+        ROOT / "pending" / "community_blacklist_candidates.txt",
 }
 
 
-@dataclass
-class Issue:
-    level: str  # "error" | "warning"
-    file: str
-    line: int | None
-    message: str
+# ============================================================
+# LIMITS
+# ============================================================
+
+MAX_LINE = 255
+
+MAX_TOTAL = int(
+    os.environ.get(
+        "AEGIS_MAX_TOTAL_FEED_LINES",
+        "5000",
+    )
+)
+
+MAX_NEW = int(
+    os.environ.get(
+        "AEGIS_MAX_NEW_ENTRIES",
+        "500",
+    )
+)
 
 
-@dataclass
-class Entry:
-    value: str
-    key: str  # normalised (case-folded) value used for comparisons
-    line: int
-    kind: str  # "sha256" | "name"
+# ============================================================
+# HASH FORMATS
+# ============================================================
+
+SHA256_RE = re.compile(
+    r"^(?:sha256:)?([0-9a-f]{64})$",
+    re.I,
+)
+
+SHA1_RE = re.compile(
+    r"^(?:sha1:)?([0-9a-f]{40})$",
+    re.I,
+)
+
+MD5_RE = re.compile(
+    r"^(?:md5:)?([0-9a-f]{32})$",
+    re.I,
+)
 
 
-@dataclass
-class FeedResult:
-    name: str
-    entries: list[Entry] = field(default_factory=list)
-    issues: list[Issue] = field(default_factory=list)
+# ============================================================
+# HUMAN-READABLE IDENTIFIER
+# ============================================================
 
-    def error(self, line: int | None, message: str) -> None:
-        self.issues.append(Issue("error", self.name, line, message))
-
-    def warn(self, line: int | None, message: str) -> None:
-        self.issues.append(Issue("warning", self.name, line, message))
+NAME_RE = re.compile(
+    r"^[a-z0-9][a-z0-9._ -]{2,199}$",
+    re.I,
+)
 
 
-def bad_characters(text: str) -> list[str]:
-    """Return a description of each forbidden character in ``text``."""
-    found = []
-    for ch in text:
-        if ch in ("\n", "\t"):
+# ============================================================
+# PROTECTED SYSTEM NAMES
+#
+# These must never become remotely controlled trust rules.
+# ============================================================
+
+PROTECTED_NAMES = {
+    "system",
+    "system32",
+    "windows",
+
+    "winlogon.exe",
+    "lsass.exe",
+    "csrss.exe",
+    "smss.exe",
+    "services.exe",
+    "svchost.exe",
+    "explorer.exe",
+    "dwm.exe",
+    "wininit.exe",
+    "taskhostw.exe",
+    "runtimebroker.exe",
+
+    "securityhealthservice.exe",
+    "msmpeng.exe",
+    "mrt.exe",
+
+    "powershell.exe",
+    "pwsh.exe",
+    "cmd.exe",
+    "conhost.exe",
+
+    "dllhost.exe",
+    "rundll32.exe",
+    "regsvr32.exe",
+    "msiexec.exe",
+    "wmic.exe",
+
+    "wscript.exe",
+    "cscript.exe",
+
+    "bash",
+    "sh",
+    "sudo",
+    "init",
+    "kernel",
+    "systemd",
+}
+
+
+# ============================================================
+# HIGH-RISK WINDOWS EXECUTABLES
+#
+# A whitelist entry for one of these names is not acceptable.
+# ============================================================
+
+SUSPICIOUS_WL_NAMES = {
+    "powershell.exe",
+    "pwsh.exe",
+    "cmd.exe",
+    "wscript.exe",
+    "cscript.exe",
+
+    "mshta.exe",
+    "rundll32.exe",
+    "regsvr32.exe",
+    "msiexec.exe",
+    "wmic.exe",
+
+    "certutil.exe",
+    "bitsadmin.exe",
+    "curl.exe",
+    "wget.exe",
+}
+
+
+# ============================================================
+# FORBIDDEN CONTENT
+# ============================================================
+
+FORBIDDEN_CHARS = {
+    "\x00",
+    "\r",
+    "\n",
+    "\t",
+}
+
+
+FORBIDDEN_SUBSTRINGS = (
+    "../",
+    "..\\",
+    "\\",
+    "/",
+    "*",
+    "?",
+    "|",
+    ";",
+    "&&",
+    "||",
+)
+
+
+# ============================================================
+# RESULT STRUCTURE
+# ============================================================
+
+def result():
+    return {
+        "schema": 1,
+        "decision": "PENDING",
+        "changed_additions": 0,
+        "total_feed_entries": 0,
+        "entries": [],
+        "errors": [],
+        "warnings": [],
+        "reputation": [],
+    }
+
+
+# ============================================================
+# REPORT HANDLING
+# ============================================================
+
+def save_report(data: dict, path: Path) -> None:
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    path.write_text(
+        json.dumps(
+            data,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def load_report(path: Path) -> dict:
+    if not path.exists():
+        raise SystemExit(
+            f"Report not found: {path}"
+        )
+
+    return json.loads(
+        path.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+# ============================================================
+# FEED READING
+# ============================================================
+
+def feed_lines(path: Path):
+    if not path.exists():
+        return []
+
+    lines = []
+
+    try:
+        content = path.read_text(
+            encoding="utf-8",
+            errors="strict",
+        )
+    except Exception as exc:
+        raise SystemExit(
+            f"Unable to read feed {path}: {exc}"
+        )
+
+    for number, raw in enumerate(
+        content.splitlines(),
+        1,
+    ):
+        value = raw.strip().lower()
+
+        if not value:
             continue
-        if ch == "\x00":
-            found.append("NUL (U+0000)")
-        elif ch in BIDI_CONTROLS:
-            found.append(f"bidi control U+{ord(ch):04X}")
-        elif unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co", "Cn"):
-            found.append(f"control/format character U+{ord(ch):04X}")
-    return found
+
+        if value.startswith("#"):
+            continue
+
+        lines.append(
+            (
+                number,
+                value,
+            )
+        )
+
+    return lines
 
 
-def split_entry(raw: str) -> tuple[str, bool]:
-    """Strip an optional `` # comment`` from a line.
+# ============================================================
+# CLASSIFICATION
+# ============================================================
 
-    Returns ``(entry_text, is_comment_or_blank)``. The entry text is *not*
-    stripped so leading/trailing whitespace can be reported.
-    """
-    if raw.strip() == "" or raw.lstrip().startswith("#"):
-        return "", True
-    match = re.search(r"\s+#", raw)
+def classify(value: str):
+    match = SHA256_RE.fullmatch(value)
+
     if match:
-        return raw[: match.start()], False
-    return raw, False
-
-
-def classify(entry: str) -> tuple[str | None, str | None]:
-    """Return ``(kind, error_message)`` for a stripped entry."""
-    if SHA256_RE.match(entry):
-        return "sha256", None
-    if HASHLIKE_RE.match(entry):
-        return None, (
-            f"looks like a hash but has {len(entry)} hex characters; "
-            "only SHA-256 (64 hex characters) is supported"
+        return (
+            "sha256",
+            match.group(1).lower(),
         )
-    if "/" in entry or "\\" in entry:
-        return None, "path separators are not allowed; use a bare file name"
-    if ".." in entry:
-        return None, "'..' is not allowed in file names"
-    if len(entry) > MAX_NAME_LENGTH:
-        return None, f"file name longer than {MAX_NAME_LENGTH} characters"
-    if not SAFE_NAME_RE.match(entry):
-        bad = sorted({c for c in entry if not SAFE_NAME_RE.match(c)})
-        shown = " ".join(repr(c) for c in bad)
-        return None, f"file name contains disallowed characters: {shown}"
-    if entry.strip(". ") == "":
-        return None, "file name consists only of dots/spaces"
-    if entry.endswith((".", " ")):
-        return None, "file name must not end with '.' or a space"
-    if entry.split(".")[0].strip().lower() in RESERVED_NAMES:
-        return None, "Windows reserved device name"
-    return "name", None
 
+    match = SHA1_RE.fullmatch(value)
 
-def parse_text(name: str, text: str, result: FeedResult) -> None:
-    lines = text.split("\n")
-    if lines and lines[-1] == "":
-        lines.pop()
-    if len(lines) > MAX_LINES:
-        result.error(None, f"{len(lines)} lines exceeds the limit of {MAX_LINES}")
-        return
-    crlf_reported = False
-    for lineno, raw in enumerate(lines, start=1):
-        if raw.endswith("\r"):
-            raw = raw[:-1]
-            if not crlf_reported:
-                result.warn(lineno, "CRLF line endings found; LF is preferred")
-                crlf_reported = True
-        bad = bad_characters(raw)
-        if bad:
-            result.error(lineno, "forbidden characters: " + ", ".join(sorted(set(bad))))
-            continue
-        if "\t" in raw:
-            result.error(lineno, "tab characters are not allowed")
-            continue
-        entry, skip = split_entry(raw)
-        if skip:
-            continue
-        if entry != entry.strip():
-            result.error(lineno, f"leading/trailing whitespace around entry {entry.strip()!r}")
-            entry = entry.strip()
-        kind, problem = classify(entry)
-        if problem:
-            result.error(lineno, f"invalid entry {entry!r}: {problem}")
-            continue
-        assert kind is not None
-        result.entries.append(Entry(entry, entry.casefold(), lineno, kind))
-
-
-def validate_file(root: Path, name: str) -> FeedResult:
-    result = FeedResult(name)
-    path = root / name
-    if not path.is_file():
-        result.error(None, "file is missing")
-        return result
-    size = path.stat().st_size
-    if size > MAX_FILE_BYTES:
-        result.error(None, f"file is {size} bytes, limit is {MAX_FILE_BYTES}")
-        return result
-    data = path.read_bytes()
-    if data.startswith(b"\xef\xbb\xbf"):
-        result.warn(1, "UTF-8 byte order mark found; please save without BOM")
-        data = data[3:]
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        result.error(None, f"not valid UTF-8 (byte offset {exc.start})")
-        return result
-    if data and not data.endswith(b"\n"):
-        result.warn(None, "file does not end with a newline")
-    parse_text(name, text, result)
-
-    seen: dict[str, Entry] = {}
-    for entry in result.entries:
-        first = seen.get(entry.key)
-        if first:
-            result.error(
-                entry.line,
-                f"duplicate entry {entry.value!r} (first seen on line {first.line})",
-            )
-        else:
-            seen[entry.key] = entry
-    return result
-
-
-def cross_checks(black: FeedResult, white: FeedResult) -> None:
-    black_keys = {e.key: e for e in black.entries}
-    for entry in white.entries:
-        if entry.key in black_keys:
-            white.error(
-                entry.line,
-                f"{entry.value!r} is in both {WHITELIST} and {BLACKLIST} "
-                f"(blacklist line {black_keys[entry.key].line})",
-            )
-    for entry in white.entries:
-        if entry.kind != "name":
-            continue
-        if entry.key in CRITICAL_SYSTEM_NAMES:
-            white.warn(
-                entry.line,
-                f"whitelisting critical Windows system name {entry.value!r} by name is "
-                "risky: malware commonly impersonates it. Prefer a SHA-256 hash.",
-            )
-        elif entry.key in GENERIC_NAMES:
-            white.warn(
-                entry.line,
-                f"{entry.value!r} is a generic installer/updater name used by many "
-                "unrelated programs. Prefer a SHA-256 hash.",
-            )
-
-
-def entries_at_ref(root: Path, ref: str, name: str) -> set[str] | None:
-    """Return normalised entries of ``name`` at git ``ref`` (None on failure)."""
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(root), "show", f"{ref}:{name}"],
-            capture_output=True,
-            check=False,
+    if match:
+        return (
+            "sha1",
+            match.group(1).lower(),
         )
-    except OSError:
-        return None
-    if proc.returncode != 0:
-        exists = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-            capture_output=True,
-            check=False,
+
+    match = MD5_RE.fullmatch(value)
+
+    if match:
+        return (
+            "md5",
+            match.group(1).lower(),
         )
-        return set() if exists.returncode == 0 else None
-    text = proc.stdout.decode("utf-8", errors="replace")
-    keys = set()
-    for raw in text.splitlines():
-        entry, skip = split_entry(raw)
-        if not skip and entry.strip():
-            keys.add(entry.strip().casefold())
-    return keys
+
+    return (
+        "name",
+        value,
+    )
 
 
-def annotation(issue: Issue) -> str:
-    props = f"file={issue.file}"
-    if issue.line:
-        props += f",line={issue.line}"
-    message = issue.message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    return f"::{issue.level} {props}::{message}"
+# ============================================================
+# ENTRY VALIDATION
+# ============================================================
+
+def validate_entry(
+    value: str,
+    feed_type: str,
+    where: str,
+    data: dict,
+):
+    # --------------------------------------------------------
+    # Control characters
+    # --------------------------------------------------------
+
+    if any(
+        char in value
+        for char in FORBIDDEN_CHARS
+    ):
+        data["errors"].append(
+            f"{where}: control character in entry"
+        )
+
+        return False
+
+    # --------------------------------------------------------
+    # Length
+    # --------------------------------------------------------
+
+    if len(value) > MAX_LINE:
+        data["errors"].append(
+            f"{where}: entry exceeds "
+            f"{MAX_LINE} characters"
+        )
+
+        return False
+
+    # --------------------------------------------------------
+    # Path / wildcard / rule injection
+    # --------------------------------------------------------
+
+    if any(
+        token in value
+        for token in FORBIDDEN_SUBSTRINGS
+    ):
+        data["errors"].append(
+            f"{where}: path/wildcard/rule syntax "
+            f"is forbidden: {value!r}"
+        )
+
+        return False
+
+    # --------------------------------------------------------
+    # Classification
+    # --------------------------------------------------------
+
+    kind, normalized = classify(value)
+
+    # --------------------------------------------------------
+    # Filename / name
+    # --------------------------------------------------------
+
+    if kind == "name":
+
+        if not NAME_RE.fullmatch(
+            normalized
+        ):
+            data["errors"].append(
+                f"{where}: invalid community "
+                f"identifier: {value!r}"
+            )
+
+            return False
+
+        # Get executable base name.
+        base = (
+            normalized.rsplit(".", 1)[0]
+            if "." in normalized
+            else normalized
+        )
+
+        # ----------------------------------------------------
+        # Protected operating-system names
+        # ----------------------------------------------------
+
+        if (
+            normalized in PROTECTED_NAMES
+            or base in PROTECTED_NAMES
+        ):
+            data["errors"].append(
+                f"{where}: protected "
+                f"operating-system identifier: "
+                f"{value!r}"
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # Suspicious whitelist names
+        # ----------------------------------------------------
+
+        if (
+            feed_type == "whitelist"
+            and normalized in SUSPICIOUS_WL_NAMES
+        ):
+            data["errors"].append(
+                f"{where}: high-risk executable "
+                f"cannot be promoted to whitelist "
+                f"by name alone: {value!r}"
+            )
+
+            return False
+
+        # ----------------------------------------------------
+        # Filename-only whitelist warning
+        # ----------------------------------------------------
+
+        if feed_type == "whitelist":
+            data["warnings"].append(
+                f"{where}: filename-only whitelist "
+                f"entry has no cryptographic identity: "
+                f"{value!r}"
+            )
+
+    # --------------------------------------------------------
+    # Hash
+    # --------------------------------------------------------
+
+    else:
+
+        if kind == "sha256":
+            pass
+
+        elif kind in {
+            "sha1",
+            "md5",
+        }:
+            data["warnings"].append(
+                f"{where}: {kind.upper()} is accepted "
+                f"for compatibility; SHA-256 is preferred"
+            )
+
+    return True
 
 
-def md_escape(text: str) -> str:
-    return text.replace("|", "\\|").replace("`", "'")
+# ============================================================
+# COMPLETE FEED VALIDATION
+# ============================================================
 
+def collect_all(data: dict):
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", default=".", help="repository root (default: .)")
-    parser.add_argument("--base-ref", help="git ref to diff entries against")
-    args = parser.parse_args(argv)
-    root = Path(args.root).resolve()
+    total = 0
 
-    results = {name: validate_file(root, name) for name in FEED_FILES}
-    cross_checks(results[BLACKLIST], results[WHITELIST])
+    seen_global = {}
 
-    issues = [i for r in results.values() for i in r.issues]
-    errors = [i for i in issues if i.level == "error"]
-    warnings = [i for i in issues if i.level == "warning"]
+    for key, path in FEEDS.items():
 
-    diffs: dict[str, tuple[list[str], list[str]]] = {}
-    if args.base_ref:
-        for name, result in results.items():
-            old = entries_at_ref(root, args.base_ref, name)
-            if old is None:
-                msg = f"could not read {name} at ref {args.base_ref!r}; skipping diff"
-                warnings.append(Issue("warning", name, None, msg))
-                continue
-            current = {e.key: e.value for e in result.entries}
-            added = sorted(current[k] for k in current.keys() - old)
-            removed = sorted(old - current.keys())
-            diffs[name] = (added, removed)
+        feed_type = (
+            "whitelist"
+            if "whitelist" in key
+            else "blacklist"
+        )
 
-    for issue in errors + warnings:
-        print(annotation(issue))
+        rows = feed_lines(path)
 
-    print()
-    for name, result in results.items():
-        hashes = sum(1 for e in result.entries if e.kind == "sha256")
-        names = len(result.entries) - hashes
-        print(f"{name}: {len(result.entries)} entries ({names} names, {hashes} SHA-256)")
-    for name, (added, removed) in diffs.items():
-        print(f"{name} vs {args.base_ref}: +{len(added)} / -{len(removed)}")
-        for value in added:
-            print(f"  + {value}")
-        for value in removed:
-            print(f"  - {value}")
-    status = "FAILED" if errors else "OK"
-    print(f"\nValidation {status}: {len(errors)} error(s), {len(warnings)} warning(s)")
+        if len(rows) > MAX_TOTAL:
 
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path:
-        icon = "\u274c" if errors else "\u2705"
-        out = [f"## {icon} AEGIS community feed validation: {status}", ""]
-        out += ["| File | Entries | Names | SHA-256 |", "| --- | ---: | ---: | ---: |"]
-        for name, result in results.items():
-            hashes = sum(1 for e in result.entries if e.kind == "sha256")
-            total = len(result.entries)
-            out.append(f"| `{name}` | {total} | {total - hashes} | {hashes} |")
-        out.append("")
-        if errors or warnings:
-            out += ["### Findings", "", "| Level | File | Line | Message |",
-                    "| --- | --- | ---: | --- |"]
-            for i in errors + warnings:
-                out.append(
-                    f"| {i.level} | `{i.file}` | {i.line or ''} | {md_escape(i.message)} |"
+            data["errors"].append(
+                f"{path.relative_to(ROOT)}: "
+                f"exceeds {MAX_TOTAL} active lines"
+            )
+
+        for line_number, value in rows:
+
+            total += 1
+
+            validate_entry(
+                value,
+                feed_type,
+                (
+                    f"{path.relative_to(ROOT)}:"
+                    f"{line_number}"
+                ),
+                data,
+            )
+
+            kind, normalized = classify(
+                value
+            )
+
+            marker = (
+                feed_type,
+                normalized,
+            )
+
+            if marker in seen_global:
+
+                data["errors"].append(
+                    f"duplicate {feed_type} entry: "
+                    f"{value!r} also appears at "
+                    f"{seen_global[marker]}"
                 )
-            out.append("")
-        if diffs:
-            out += [f"### Changes vs `{md_escape(args.base_ref)}`", ""]
-            for name, (added, removed) in diffs.items():
-                out.append(f"**{name}**: +{len(added)} / -{len(removed)}")
-                out.append("")
-                if added or removed:
-                    out.append("```diff")
-                    out += [f"+ {v}" for v in added] + [f"- {v}" for v in removed]
-                    out.append("```")
-                    out.append("")
-        with open(summary_path, "a", encoding="utf-8") as fh:
-            fh.write("\n".join(out) + "\n")
 
-    return 1 if errors else 0
+            else:
+
+                seen_global[
+                    marker
+                ] = (
+                    f"{path.relative_to(ROOT)}:"
+                    f"{line_number}"
+                )
+
+    # --------------------------------------------------------
+    # Whitelist / blacklist conflict
+    # --------------------------------------------------------
+
+    whitelist_values = {
+        value
+        for _, value in feed_lines(
+            FEEDS["whitelist"]
+        )
+    }
+
+    blacklist_values = {
+        value
+        for _, value in feed_lines(
+            FEEDS["blacklist"]
+        )
+    }
+
+    conflicts = (
+        whitelist_values
+        & blacklist_values
+    )
+
+    for conflict in sorted(conflicts):
+
+        data["errors"].append(
+            "identifier exists in BOTH "
+            f"production feeds: {conflict!r}"
+        )
+
+    return total
+
+
+# ============================================================
+# GIT
+# ============================================================
+
+def git_output(*args):
+
+    return subprocess.check_output(
+        [
+            "git",
+            *args,
+        ],
+        cwd=ROOT,
+        text=True,
+        stderr=subprocess.STDOUT,
+    )
+
+
+# ============================================================
+# FIND NEW PR ENTRIES
+# ============================================================
+
+def changed_additions(
+    base_sha: str | None,
+    head_sha: str | None,
+):
+
+    if not base_sha or not head_sha:
+        return []
+
+    try:
+
+        patch = git_output(
+            "diff",
+            "--unified=0",
+            base_sha,
+            head_sha,
+            "--",
+            "pending",
+            "global_whitelist.txt",
+            "global_blacklist.txt",
+        )
+
+    except Exception as exc:
+
+        raise SystemExit(
+            f"Unable to inspect PR diff: {exc}"
+        )
+
+    additions = []
+
+    current_file = None
+
+    for raw in patch.splitlines():
+
+        # ----------------------------------------------------
+        # Current file
+        # ----------------------------------------------------
+
+        if raw.startswith("+++"):
+
+            if raw.startswith("+++ b/"):
+                current_file = raw[6:]
+            else:
+                current_file = None
+
+            continue
+
+        # ----------------------------------------------------
+        # Only additions
+        # ----------------------------------------------------
+
+        if (
+            not raw.startswith("+")
+            or raw.startswith("+++")
+            or not current_file
+        ):
+            continue
+
+        value = raw[1:].strip().lower()
+
+        if not value:
+            continue
+
+        if value.startswith("#"):
+            continue
+
+        # ----------------------------------------------------
+        # Feed type
+        # ----------------------------------------------------
+
+        if current_file.endswith(
+            "global_whitelist.txt"
+        ):
+            feed_type = "whitelist"
+
+        elif current_file.endswith(
+            "global_blacklist.txt"
+        ):
+            feed_type = "blacklist"
+
+        elif (
+            "community_whitelist_candidates.txt"
+            in current_file
+        ):
+            feed_type = "whitelist"
+
+        elif (
+            "community_blacklist_candidates.txt"
+            in current_file
+        ):
+            feed_type = "blacklist"
+
+        else:
+            continue
+
+        additions.append(
+            (
+                current_file,
+                feed_type,
+                value,
+            )
+        )
+
+    return additions
+
+
+# ============================================================
+# VIRUSTOTAL
+# ============================================================
+
+def vt_lookup(
+    sha256: str,
+    api_key: str,
+):
+
+    url = (
+        "https://www.virustotal.com/api/v3/files/"
+        + urllib.parse.quote(
+            sha256
+        )
+    )
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "x-apikey": api_key,
+            "accept": "application/json",
+        },
+    )
+
+    try:
+
+        with urllib.request.urlopen(
+            request,
+            timeout=20,
+        ) as response:
+
+            return (
+                response.status,
+                json.loads(
+                    response.read().decode(
+                        "utf-8",
+                        errors="strict",
+                    )
+                ),
+            )
+
+    except urllib.error.HTTPError as exc:
+
+        body = (
+            exc.read()
+            .decode(
+                "utf-8",
+                errors="replace",
+            )[:500]
+        )
+
+        return (
+            exc.code,
+            {
+                "error": body,
+            },
+        )
+
+
+# ============================================================
+# MALWAREBAZAAR
+# ============================================================
+
+def mb_lookup(
+    indicator: str,
+    auth_key: str,
+):
+
+    payload = urllib.parse.urlencode(
+        {
+            "query": "get_info",
+            "hash": indicator,
+        }
+    ).encode()
+
+    request = urllib.request.Request(
+        "https://mb-api.abuse.ch/api/v1/",
+        headers={
+            "Auth-Key": auth_key,
+            "Content-Type":
+                "application/x-www-form-urlencoded",
+        },
+        data=payload,
+        method="POST",
+    )
+
+    try:
+
+        with urllib.request.urlopen(
+            request,
+            timeout=20,
+        ) as response:
+
+            return (
+                response.status,
+                json.loads(
+                    response.read().decode(
+                        "utf-8",
+                        errors="strict",
+                    )
+                ),
+            )
+
+    except urllib.error.HTTPError as exc:
+
+        body = (
+            exc.read()
+            .decode(
+                "utf-8",
+                errors="replace",
+            )[:500]
+        )
+
+        return (
+            exc.code,
+            {
+                "error": body,
+            },
+        )
+
+
+# ============================================================
+# REPUTATION ENGINE
+# ============================================================
+
+def run_reputation(
+    provider: str,
+    data: dict,
+):
+
+    # --------------------------------------------------------
+    # API key
+    # --------------------------------------------------------
+
+    if provider == "virustotal":
+
+        key = os.environ.get(
+            "VIRUSTOTAL_API_KEY",
+            "",
+        ).strip()
+
+        if not key:
+
+            data["warnings"].append(
+                "VirusTotal check skipped: "
+                "VIRUSTOTAL_API_KEY is not configured"
+            )
+
+            return
+
+    elif provider == "malwarebazaar":
+
+        key = os.environ.get(
+            "MALWAREBAZAAR_AUTH_KEY",
+            "",
+        ).strip()
+
+        if not key:
+
+            data["warnings"].append(
+                "MalwareBazaar check skipped: "
+                "MALWAREBAZAAR_AUTH_KEY is not configured"
+            )
+
+            return
+
+    else:
+
+        raise SystemExit(
+            f"Unknown reputation provider: "
+            f"{provider}"
+        )
+
+    # --------------------------------------------------------
+    # Only hash indicators
+    # --------------------------------------------------------
+
+    hashes = []
+
+    for item in data.get(
+        "entries",
+        [],
+    ):
+
+        if item["kind"] in {
+            "sha256",
+            "sha1",
+            "md5",
+        }:
+
+            hashes.append(item)
+
+    seen = set()
+
+    for item in hashes:
+
+        key_id = item[
+            "normalized"
+        ]
+
+        if key_id in seen:
+            continue
+
+        seen.add(key_id)
+
+        feed_type = item[
+            "feed_type"
+        ]
+
+        # ----------------------------------------------------
+        # VirusTotal uses SHA-256 here.
+        # ----------------------------------------------------
+
+        if (
+            provider == "virustotal"
+            and item["kind"] != "sha256"
+        ):
+
+            data["warnings"].append(
+                "VirusTotal skipped non-SHA256 "
+                f"indicator: {key_id}"
+            )
+
+            continue
+
+        try:
+
+            # =================================================
+            # VIRUSTOTAL
+            # =================================================
+
+            if provider == "virustotal":
+
+                status, body = vt_lookup(
+                    key_id,
+                    key,
+                )
+
+                # ------------------------------------------------
+                # Unknown hash
+                # ------------------------------------------------
+
+                if status == 404:
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "not_found",
+                    }
+
+                # ------------------------------------------------
+                # API error
+                # ------------------------------------------------
+
+                elif status != 200:
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "error",
+                        "http":
+                            status,
+                    }
+
+                    data["warnings"].append(
+                        "VirusTotal lookup failed "
+                        f"for {key_id}: HTTP {status}"
+                    )
+
+                # ------------------------------------------------
+                # Result
+                # ------------------------------------------------
+
+                else:
+
+                    attributes = (
+                        body
+                        .get("data", {})
+                        .get("attributes", {})
+                    )
+
+                    stats = (
+                        attributes
+                        .get(
+                            "last_analysis_stats",
+                            {},
+                        )
+                        or {}
+                    )
+
+                    malicious = int(
+                        stats.get(
+                            "malicious",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    suspicious = int(
+                        stats.get(
+                            "suspicious",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "found",
+                        "malicious":
+                            malicious,
+                        "suspicious":
+                            suspicious,
+                        "reputation":
+                            attributes.get(
+                                "reputation"
+                            ),
+                    }
+
+                    min_detections = int(
+                        os.environ.get(
+                            "AEGIS_VT_MIN_DETECTIONS",
+                            "2",
+                        )
+                    )
+
+                    # ------------------------------------------------
+                    # NEVER allow known malicious hash into whitelist
+                    # ------------------------------------------------
+
+                    if (
+                        feed_type == "whitelist"
+                        and malicious >= 1
+                    ):
+
+                        data["errors"].append(
+                            "VirusTotal: whitelist "
+                            "hash has "
+                            f"{malicious} malicious "
+                            "detections: {key_id}"
+                        )
+
+                    # ------------------------------------------------
+                    # Blacklist corroboration
+                    # ------------------------------------------------
+
+                    elif (
+                        feed_type == "blacklist"
+                        and malicious >= min_detections
+                    ):
+
+                        data["warnings"].append(
+                            "VirusTotal corroborates "
+                            "blacklist hash "
+                            f"({malicious} malicious "
+                            f"detections): {key_id}"
+                        )
+
+                    # ------------------------------------------------
+                    # Suspicious whitelist
+                    # ------------------------------------------------
+
+                    elif (
+                        feed_type == "whitelist"
+                        and suspicious >= 1
+                    ):
+
+                        data["warnings"].append(
+                            "VirusTotal: whitelist "
+                            "hash has suspicious "
+                            f"detections: {key_id}"
+                        )
+
+            # =================================================
+            # MALWAREBAZAAR
+            # =================================================
+
+            else:
+
+                status, body = mb_lookup(
+                    key_id,
+                    key,
+                )
+
+                if status != 200:
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "error",
+                        "http":
+                            status,
+                    }
+
+                    data["warnings"].append(
+                        "MalwareBazaar lookup failed "
+                        f"for {key_id}: HTTP {status}"
+                    )
+
+                elif (
+                    body.get(
+                        "query_status"
+                    )
+                    == "hash_not_found"
+                ):
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "not_found",
+                    }
+
+                else:
+
+                    record = {
+                        "provider":
+                            provider,
+                        "indicator":
+                            key_id,
+                        "status":
+                            "found",
+                    }
+
+                    # ------------------------------------------------
+                    # Known malware can NEVER enter whitelist
+                    # ------------------------------------------------
+
+                    if feed_type == "whitelist":
+
+                        data["errors"].append(
+                            "MalwareBazaar: "
+                            "whitelist hash is "
+                            "known malware: "
+                            f"{key_id}"
+                        )
+
+                    else:
+
+                        data["warnings"].append(
+                            "MalwareBazaar corroborates "
+                            "blacklist hash: "
+                            f"{key_id}"
+                        )
+
+            data["reputation"].append(
+                record
+            )
+
+        except Exception as exc:
+
+            # ------------------------------------------------
+            # Reputation service outage is NOT treated as
+            # a clean result.
+            # ------------------------------------------------
+
+            data["warnings"].append(
+                f"{provider} lookup error "
+                f"for {key_id}: "
+                f"{str(exc)[:180]}"
+            )
+
+            data["reputation"].append(
+                {
+                    "provider":
+                        provider,
+                    "indicator":
+                        key_id,
+                    "status":
+                        "error",
+                }
+            )
+
+
+# ============================================================
+# VALIDATION PHASE
+# ============================================================
+
+def phase_validate(
+    args,
+    report: Path,
+):
+
+    data = result()
+
+    # --------------------------------------------------------
+    # Validate current repository feed
+    # --------------------------------------------------------
+
+    total = collect_all(
+        data
+    )
+
+    data[
+        "total_feed_entries"
+    ] = total
+
+    # --------------------------------------------------------
+    # Inspect PR additions
+    # --------------------------------------------------------
+
+    additions = changed_additions(
+        args.base_sha,
+        args.head_sha,
+    )
+
+    if len(additions) > MAX_NEW:
+
+        data["errors"].append(
+            f"PR adds {len(additions)} "
+            f"entries; maximum allowed is "
+            f"{MAX_NEW}"
+        )
+
+    data[
+        "changed_additions"
+    ] = len(additions)
+
+    # --------------------------------------------------------
+    # Validate every added entry
+    # --------------------------------------------------------
+
+    for (
+        path,
+        feed_type,
+        value,
+    ) in additions:
+
+        kind, normalized = classify(
+            value
+        )
+
+        item = {
+            "path": path,
+            "feed_type":
+                feed_type,
+            "value":
+                value,
+            "kind":
+                kind,
+            "normalized":
+                normalized,
+        }
+
+        data[
+            "entries"
+        ].append(item)
+
+        validate_entry(
+            value,
+            feed_type,
+            f"PR addition {path}",
+            data,
+        )
+
+    # --------------------------------------------------------
+    # Whitelist warning
+    # --------------------------------------------------------
+
+    if any(
+        item["feed_type"] == "whitelist"
+        for item in data["entries"]
+    ):
+
+        data["warnings"].append(
+            "Whitelist changes require human "
+            "review; this gate never "
+            "auto-merges or auto-trusts them."
+        )
+
+    # --------------------------------------------------------
+    # Initial decision
+    # --------------------------------------------------------
+
+    data["decision"] = (
+        "PASS"
+        if not data["errors"]
+        else "FAIL"
+    )
+
+    save_report(
+        data,
+        report,
+    )
+
+    print(
+        json.dumps(
+            {
+                "decision":
+                    data["decision"],
+                "changed_additions":
+                    len(additions),
+                "errors":
+                    len(data["errors"]),
+                "warnings":
+                    len(data["warnings"]),
+            },
+            indent=2,
+        )
+    )
+
+    return data
+
+
+# ============================================================
+# FINAL DECISION
+# ============================================================
+
+def finalize(
+    report: Path,
+):
+
+    data = load_report(
+        report
+    )
+
+    data["decision"] = (
+        "PASS"
+        if not data.get("errors")
+        else "FAIL"
+    )
+
+    save_report(
+        data,
+        report,
+    )
+
+    print(
+        json.dumps(
+            data,
+            indent=2,
+        )
+    )
+
+    if data["decision"] != "PASS":
+
+        print(
+            "AEGIS SECURITY GATE: FAIL",
+            file=sys.stderr,
+        )
+
+        sys.exit(1)
+
+    print(
+        "AEGIS SECURITY GATE: PASS"
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "AEGIS Community "
+            "Intelligence Security Gate"
+        )
+    )
+
+    parser.add_argument(
+        "--base-sha"
+    )
+
+    parser.add_argument(
+        "--head-sha"
+    )
+
+    parser.add_argument(
+        "--report",
+        default=str(
+            REPORT_DEFAULT
+        ),
+    )
+
+    parser.add_argument(
+        "--reputation",
+        choices=[
+            "virustotal",
+            "malwarebazaar",
+        ],
+    )
+
+    parser.add_argument(
+        "--finalize",
+        action="store_true",
+    )
+
+    args = parser.parse_args()
+
+    report = Path(
+        args.report
+    )
+
+    # --------------------------------------------------------
+    # Finalize existing report
+    # --------------------------------------------------------
+
+    if args.finalize:
+
+        finalize(
+            report
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Reputation phase
+    # --------------------------------------------------------
+
+    if args.reputation:
+
+        data = load_report(
+            report
+        )
+
+        run_reputation(
+            args.reputation,
+            data,
+        )
+
+        data["decision"] = (
+            "PASS"
+            if not data["errors"]
+            else "FAIL"
+        )
+
+        save_report(
+            data,
+            report,
+        )
+
+        print(
+            f"{args.reputation}: "
+            f"checked; "
+            f"errors="
+            f"{len(data['errors'])}, "
+            f"warnings="
+            f"{len(data['warnings'])}"
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Normal validation
+    # --------------------------------------------------------
+
+    phase_validate(
+        args,
+        report,
+    )
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
