@@ -10,6 +10,7 @@ lenovovantage-(genericmessagingaddin).exe
 lms.exe
 lsb.exe
 notepad++.exe
+openwith.exe
 privacyiconclient.exe
 ravcpl64.exe
 screenclippinghost.exe
@@ -18,3 +19,4 @@ setup.exe
 startallbackcfg.exe
 tailscale-ipn.exe
 userssctrl.exe
+winrar.exe
