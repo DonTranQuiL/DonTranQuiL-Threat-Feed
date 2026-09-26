@@ -12,10 +12,12 @@ on:
     # report on every PR. PRs without feed changes need no API calls
     # and finish in seconds; non-feed changes by non-members fail.
 
-  # PRs opened / updated with GITHUB_TOKEN (the promotion job) do not
-  # trigger pull_request_target, so the promotion job dispatches the
-  # gate for its PR. The run checks that PR's current head commit
-  # (must equal the dispatched commit; same-repository head only).
+  # PRs opened / updated with GITHUB_TOKEN (the promotion job's
+  # fallback when the AEGIS App is not configured) do not trigger
+  # pull_request_target, so the promotion job dispatches the gate for
+  # its PR (visible, but not counted by the ruleset). The run checks
+  # that PR's current head commit (must equal the dispatched commit;
+  # same-repository head only).
   workflow_dispatch:
     inputs:
       pr:
@@ -366,11 +368,22 @@ jobs:
   # answers) and merged by a human. Rejected lines are listed in a
   # comment on the staging PR.
   #
+  # Token for the push + PR: the "AEGIS Promotion Bot" GitHub App when
+  # the secrets AEGIS_APP_ID (App ID or Client ID) and
+  # AEGIS_APP_PRIVATE_KEY exist. App pushes fire pull_request_target
+  # (opened / synchronize) like a human push, so the REQUIRED gate
+  # check is reported on the promotion PR. Without the App (or if
+  # minting fails) the job falls back to GITHUB_TOKEN: its pushes do
+  # not start pull_request_target, the gate is dispatched instead
+  # (visible, but NOT counted by the ruleset) and the promotion PR
+  # gets a comment asking for a close / reopen.
+  #
   # Security: runs main's script on main's checkout; the staging PR is
   # only data (the gate report from the job above, built by the same
-  # trusted script). No PR code is checked out or executed. The token
-  # can push branches, but the main ruleset (PR + required gate, no
-  # bypass) stops it from touching main.
+  # trusted script). No PR code is checked out or executed. No
+  # credentials are stored in the checkout; the token is used only for
+  # the push and the API calls. The main ruleset (PR + required gate,
+  # no bypass) stops either token from touching main.
   # ------------------------------------------------------------------
   promote:
     name: AEGIS verified promotion
@@ -384,10 +397,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # GITHUB_TOKEN (fallback path and staging comment).
     permissions:
-      contents: write        # push the aegis-verified-promotion branch
-      pull-requests: write   # open / update the promotion PR, comment on staging
-      actions: write         # dispatch the security gate for the promotion PR
+      contents: write        # fallback: push the aegis-verified-promotion branch
+      pull-requests: write   # fallback PR; comments on staging / promotion PR
+      actions: write         # fallback: dispatch the security gate
 
     # One promotion at a time; never cancelled half-way.
     concurrency:
@@ -397,19 +411,76 @@ jobs:
     env:
       PROMOTION_BRANCH: aegis-verified-promotion
       PROMOTION_TITLE: AEGIS verified promotion
+      REOPEN_MARKER: '<!-- aegis-promotion-reopen -->'
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
       STAGING_PR: ${{ github.event.pull_request.number }}
       STAGING_SHA: ${{ github.event.pull_request.head.sha }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       GH_TOKEN: ${{ github.token }}
+      # 'true' / 'false' only; the secret values are never put in env.
+      AEGIS_APP_CONFIGURED: ${{ secrets.AEGIS_APP_ID != '' && secrets.AEGIS_APP_PRIVATE_KEY != '' }}
 
     steps:
+
+      # Installation token for THIS repository only, with only the
+      # permissions the promotion needs. Failure (App not installed,
+      # wrong key, ...) falls back to GITHUB_TOKEN with a warning.
+      - name: Create GitHub App token
+        id: app-token
+        if: env.AEGIS_APP_CONFIGURED == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          # v3 also accepts this value as "client-id" (the newer name;
+          # "app-id" still works but logs a deprecation notice).
+          # actionlint 1.7.12 only knows "app-id" for v3, so it stays.
+          app-id: ${{ secrets.AEGIS_APP_ID }}
+          private-key: ${{ secrets.AEGIS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Choose promotion token
+        id: auth
+        env:
+          APP_OUTCOME: ${{ steps.app-token.outcome }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          if [ "$APP_OUTCOME" = "success" ] && [ -n "$APP_SLUG" ]; then
+            bot="${APP_SLUG}[bot]"
+            bot_id="$(gh api "users/${APP_SLUG}%5Bbot%5D" --jq .id 2>/dev/null || true)"
+            case "$bot_id" in ''|*[!0-9]*) bot_id="" ;; esac
+            email="${bot_id:+${bot_id}+}${bot}@users.noreply.github.com"
+            echo "Promotion pushes and PR updates use the GitHub App ($bot)."
+            {
+              echo "mode=app"
+              echo "name=$bot"
+              echo "email=$email"
+            } >> "$GITHUB_OUTPUT"
+          else
+            if [ "$AEGIS_APP_CONFIGURED" = "true" ]; then
+              echo "::warning::AEGIS_APP_ID / AEGIS_APP_PRIVATE_KEY are set but no App token could be created (App installed on this repository? correct key?). Falling back to GITHUB_TOKEN."
+            else
+              echo "AEGIS_APP_ID / AEGIS_APP_PRIVATE_KEY not set: using GITHUB_TOKEN (promotion PR will need a close / reopen for the required gate check)."
+            fi
+            {
+              echo "mode=github-token"
+              echo "name=github-actions[bot]"
+              echo "email=41898282+github-actions[bot]@users.noreply.github.com"
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout trusted repository
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
+          # Public repository: fetches need no credentials. The push
+          # step passes its token explicitly, so none is stored here
+          # while the promotion script runs.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -464,10 +535,13 @@ jobs:
         if: steps.build.outputs.changed == 'true'
         env:
           CARRY_REF: ${{ steps.existing.outputs.carry }}
+          PUSH_TOKEN: ${{ steps.auth.outputs.mode == 'app' && steps.app-token.outputs.token || github.token }}
+          COMMIT_NAME: ${{ steps.auth.outputs.name }}
+          COMMIT_EMAIL: ${{ steps.auth.outputs.email }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "$COMMIT_NAME"
+          git config user.email "$COMMIT_EMAIL"
           git switch -C "$PROMOTION_BRANCH"
           git add -A -- global_whitelist.txt global_blacklist.txt pending verified_whitelist.json
           git commit -q -m "AEGIS verified promotion from staging PR #$STAGING_PR" \
@@ -479,7 +553,10 @@ jobs:
           fi
           # Regenerated from main every time (lines still waiting were
           # carried over above), so a force push is intended here.
-          git push --force origin "HEAD:refs/heads/$PROMOTION_BRANCH"
+          basic="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$basic"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
+            push --force origin "HEAD:refs/heads/$PROMOTION_BRANCH"
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update promotion pull request
@@ -487,6 +564,7 @@ jobs:
         if: steps.push.outputs.pushed == 'true'
         env:
           EXISTING: ${{ steps.existing.outputs.number }}
+          GH_TOKEN: ${{ steps.auth.outputs.mode == 'app' && steps.app-token.outputs.token || github.token }}
         run: |
           set -euo pipefail
           body="$RUNNER_TEMP/aegis-promotion-body.md"
@@ -501,15 +579,55 @@ jobs:
           echo "number=$number" >> "$GITHUB_OUTPUT"
           echo "Promotion PR: #$number"
 
-      # GITHUB_TOKEN pushes do not start pull_request_target runs;
-      # workflow_dispatch is the documented exception.
+      # Fallback only. GITHUB_TOKEN pushes do not start
+      # pull_request_target; workflow_dispatch is the documented
+      # exception, but the ruleset does not count that run. With the
+      # App token the push itself starts the counted run, and a dispatch
+      # would share its concurrency group
+      # (aegis-security-gate-<PR>, cancel-in-progress) and could cancel
+      # it, so it is skipped.
       - name: Run the security gate on the promotion pull request
-        if: steps.pr.outputs.number != ''
+        if: steps.pr.outputs.number != '' && steps.auth.outputs.mode != 'app'
         env:
           PROMOTION_PR: ${{ steps.pr.outputs.number }}
         run: |
           gh workflow run aegis-community-security-gate.yml --repo "$GITHUB_REPOSITORY" \
             --ref "$PROMOTION_BRANCH" -f pr="$PROMOTION_PR"
+
+      # Fallback: GITHUB_TOKEN cannot close / reopen to trigger the
+      # gate (that would be a GITHUB_TOKEN event too), so ask a human.
+      # With the App, a stale notice from an earlier fallback is removed.
+      - name: Close / reopen notice on the promotion pull request
+        if: steps.pr.outputs.number != ''
+        env:
+          PROMOTION_PR: ${{ steps.pr.outputs.number }}
+          MODE: ${{ steps.auth.outputs.mode }}
+        run: |
+          set -euo pipefail
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PROMOTION_PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.REOPEN_MARKER))) | .id' | tail -n 1)"
+          if [ "$MODE" = "app" ]; then
+            if [ -n "$id" ]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$id"
+              echo "Removed the old close / reopen notice (App token in use)."
+            fi
+            exit 0
+          fi
+          head="$(git rev-parse --short HEAD)"
+          notice="$RUNNER_TEMP/aegis-reopen-notice.md"
+          {
+            echo "$REOPEN_MARKER"
+            echo "**Action needed: close and reopen this PR** so the required check *AEGIS Threat Feed Security Gate* is reported for commit \`$head\`."
+            echo ""
+            echo "This update was pushed with \`GITHUB_TOKEN\`, which does not start \`pull_request_target\` runs. The gate run dispatched for it is visible under Actions but is not counted by the branch ruleset."
+            echo "Configure the AEGIS Promotion Bot App (secrets \`AEGIS_APP_ID\`, \`AEGIS_APP_PRIVATE_KEY\`) to make this automatic."
+          } > "$notice"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$notice" > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PROMOTION_PR/comments" -F "body=@$notice" > /dev/null
+          fi
+          echo "::warning::Promotion PR #$PROMOTION_PR needs a close / reopen for the required gate check (GITHUB_TOKEN fallback)."
 
       - name: Report on the staging pull request
         if: always() && steps.build.outcome == 'success'

@@ -29,6 +29,12 @@ Shared threat feed configuration for DonTranQuiL projects.
 4. The gate runs again on the promotion PR (cached answers, few or no new lookups). A maintainer
    merges it; nothing is merged automatically.
 
+The promotion job pushes and opens the PR as the **AEGIS Promotion Bot** GitHub App when the
+repository secrets `AEGIS_APP_ID` and `AEGIS_APP_PRIVATE_KEY` exist (App installed on this
+repository only, permissions: contents and pull requests write). Only then does GitHub start the
+required gate for the promotion PR by itself. Without the App the job falls back to
+`GITHUB_TOKEN`, and the promotion PR asks for a close / reopen to get the required check.
+
 ## Community
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/qaHPTTKHae)
