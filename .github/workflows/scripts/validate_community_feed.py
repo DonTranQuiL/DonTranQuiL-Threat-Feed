@@ -15,7 +15,7 @@ with ``#`` are comments, blank lines are ignored.
 
 Usage::
 
-    python validate_community_feeds.py [--root PATH] [--base-ref REF]
+    python validate_community_feed.py [--root PATH] [--base-ref REF]
 
 Emits GitHub Actions ``::error`` / ``::warning`` annotations, writes a Markdown
 summary to ``$GITHUB_STEP_SUMMARY`` when set and exits non-zero on errors.
