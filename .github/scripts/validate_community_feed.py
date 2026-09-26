@@ -49,7 +49,10 @@ Important:
 - Reputation lookups are hash-only.
 - Reputation lookups are throttled, capped per run and cached;
   anything that could not be checked fails closed.
-- Filename-only whitelist entries are considered low confidence.
+- Filename-only whitelist entries are considered low confidence:
+  a new one is accepted in pending/community_whitelist_candidates.txt
+  only as "needs hash" (warning, listed in the report under
+  "needs_hash"); adding one to global_whitelist.txt is an error.
 - A protected operating-system name is only accepted in the
   whitelist when pinned to a SHA-256 that is verified known-good
   (the hash pins the exact binary); high-risk "living off the
@@ -96,6 +99,13 @@ FEEDS = {
     "pending_blacklist":
         ROOT / "pending" / "community_blacklist_candidates.txt",
 }
+
+
+GLOBAL_WHITELIST_PATH = (
+    FEEDS["whitelist"]
+    .relative_to(ROOT)
+    .as_posix()
+)
 
 
 # Files a community PR is allowed to touch.
@@ -347,10 +357,15 @@ def split_name_sha256(value: str):
 
 # ============================================================
 # HUMAN-READABLE IDENTIFIER
+#
+# Letters, digits and . _ space - + ( ) after an alphanumeric
+# first character, e.g. "notepad++.exe" or
+# "lenovovantage-(genericmessagingaddin).exe". Everything in
+# FORBIDDEN_CHARS / FORBIDDEN_SUBSTRINGS stays rejected.
 # ============================================================
 
 NAME_RE = re.compile(
-    r"^[a-z0-9][a-z0-9._ -]{2,199}$",
+    r"^[a-z0-9][a-z0-9._ +()-]{2,199}$",
     re.I,
 )
 
@@ -3304,6 +3319,19 @@ def phase_validate(
     # Validate every added entry
     # --------------------------------------------------------
 
+    # Name-only whitelist entries already in production at the
+    # PR base (see below).
+    base_global_names = {
+        value
+        for _, value in feed_lines(
+            FEEDS["whitelist"],
+            args.base_sha,
+        )
+        if classify(value)[0] == "name"
+    } if args.base_sha else set()
+
+    data["needs_hash"] = []
+
     for (
         path,
         feed_type,
@@ -3330,12 +3358,54 @@ def phase_validate(
             "entries"
         ].append(item)
 
-        validate_entry(
+        valid = validate_entry(
             value,
             feed_type,
             f"PR addition {path}",
             data,
         )
+
+        # ----------------------------------------------------
+        # Name-only whitelist additions (no hash):
+        #   pending candidates  -> accepted as "needs hash"
+        #                          (warning + report list)
+        #   global_whitelist    -> ERROR: production trust
+        #                          needs "name|sha256"
+        # Lines already in the base global whitelist (moved /
+        # re-sorted) are not new trust and are not blamed.
+        # ----------------------------------------------------
+
+        if (
+            valid
+            and feed_type == "whitelist"
+            and kind == "name"
+        ):
+
+            if path == GLOBAL_WHITELIST_PATH:
+
+                if normalized not in base_global_names:
+
+                    data["errors"].append(
+                        f"PR addition {path}: name-only "
+                        "entry cannot be added to the "
+                        "production whitelist; pin it "
+                        "as 'name|<sha256>' or submit it "
+                        "to pending/community_whitelist_"
+                        f"candidates.txt: {value!r}"
+                    )
+
+            else:
+
+                data["needs_hash"].append(
+                    value
+                )
+
+                data["warnings"].append(
+                    f"PR addition {path}: name-only "
+                    "candidate accepted as NEEDS HASH "
+                    "(not trusted until submitted as "
+                    f"'name|<sha256>'): {value!r}"
+                )
 
     # --------------------------------------------------------
     # Whitelist warning
@@ -3378,6 +3448,8 @@ def phase_validate(
                     len(data["errors"]),
                 "warnings":
                     len(data["warnings"]),
+                "needs_hash":
+                    len(data["needs_hash"]),
             },
             indent=2,
         )
