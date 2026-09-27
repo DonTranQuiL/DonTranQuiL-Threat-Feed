@@ -14,3 +14,12 @@
 #   "maintainer_override": {"reason": ...}. Removing a line here makes the
 #   gate fail on the matching whitelist line until it is removed too.
 # - Reason: plain text, 3-200 characters, no '|'.
+
+2d622b1818e148111100dc3c61c291734689ed0b2dc07c56c067c74dd41ae10a|imfanalyzer.exe|IObit Malware Fighter component; VT 3/71 low-count detections; owner-reviewed false positive
+aa562a0289bdc9881d3b66241aa75cd49a67c4b2ce65ff153752f92feca260d7|imfcore.exe|IObit Malware Fighter component; VT 1/66; owner-reviewed false positive
+301f9f8e334f1c369336739bb32fa7913db8dd4db8e0202f3bd552beea994d0f|imfsrv.exe|IObit Malware Fighter service; VT 1/67; owner-reviewed false positive
+f177747dab4ccd8cbaa93371ba2bc561e64ed28659f4084387355512fabe25f9|imftips.exe|IObit Malware Fighter tips component; VT 1/66; owner-reviewed false positive
+b00d43f33025e26b828c1fd5b86631c30209900ee89f021c996823276771a5d8|aicwifiservice.exe|AIC Semiconductor AIC8800 USB Wi-Fi mode-switch service; VT 2/71; owner-reviewed false positive
+de8fad3e99d0e90ce8aba15d604cf1e80f16c9e4b92f1a41a63d56cf7d96a414|ss_conn_service.exe|Samsung Mobile USB Connectivity Service (DEVGURU); VT 2/68, VT reputation +7; owner-reviewed false positive
+78fd94ca4125db7407c77bd7b985971a1ac95705a331401976f748770035325b|usbipd.exe|usbipd-win 5.3.0 (Frans van Dorsselaer); identical to the official GitHub release MSI; VT 1/70
+7408a54d801ce5d2c0bc6ac564d66aa8948979b7867cc4432ca61a9eaa30cede|grok bot.exe|Owner's own application (Grok Bot); VT 1/68; owner-reviewed false positive
