@@ -1,7 +1,6 @@
 aicwifiservice.exe
 brave.exe
 chrome.exe
-default-browser-agent.exe
 firefox.exe
 imfcore.exe
 imfsrv.exe
@@ -19,7 +18,6 @@ sppsvc.exe
 ss_conn_service.exe
 system idle process
 systemsettingsbroker.exe
-upfc.exe
 usbipd.exe
 imftips.exe
 lenovovantage-(genericmessagingaddin).exe

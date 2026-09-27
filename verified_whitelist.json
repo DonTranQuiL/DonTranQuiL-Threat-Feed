@@ -347,6 +347,21 @@
       "last_checked": "2026-09-27T09:25:05Z"
     },
     {
+      "name": "default-browser-agent.exe",
+      "sha256": "cb9a9d6cab65f105c71c8434b58ef977e7565ebdab5728105bcd0938af5e1740",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-27T13:19:45Z",
+      "last_checked": "2026-09-27T13:19:45Z"
+    },
+    {
       "name": "devicecensus.exe",
       "sha256": "3f2f71f1eeceedea4faa96de2b5990d19ae1cf1a8691935f1ec64e1b331f2918",
       "sources": [
@@ -1809,6 +1824,21 @@
       "last_checked": "2026-09-26T18:06:52Z"
     },
     {
+      "name": "upfc.exe",
+      "sha256": "ed2663431eaad3ddf1d89e225b901a08f06de10e8ac369fa919661aa3f59ced9",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-09-27T14:32:14Z",
+      "last_checked": "2026-09-27T14:32:14Z"
+    },
+    {
       "name": "useroobebroker.exe",
       "sha256": "72963162ad6f2100aebf76c0add9380b5a318b0b2868a860f2cb38c2d364383b",
       "sources": [
@@ -1837,6 +1867,21 @@
       },
       "first_verified": "2026-09-26T18:06:55Z",
       "last_checked": "2026-09-26T18:06:55Z"
+    },
+    {
+      "name": "waasmedicagent.exe",
+      "sha256": "58cedccd8ffb358033bd8751b2789c351a566286d1a929d0bcc3159397e965da",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-27T14:32:16Z",
+      "last_checked": "2026-09-27T14:32:16Z"
     },
     {
       "name": "wininit.exe",
