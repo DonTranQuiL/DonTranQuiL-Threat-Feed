@@ -64,6 +64,17 @@ Important:
   one of them has a proof entry in verified_whitelist.json (which
   providers confirmed it, VirusTotal counts, first_verified /
   last_checked). The gate checks that both files match.
+- Maintainer overrides (maintainer_overrides.txt, "sha256|name|reason"):
+  a hash listed there by the repository owner is accepted in the
+  whitelist despite a few VirusTotal detections (false positives,
+  at most AEGIS_OVERRIDE_MAX_DETECTIONS malicious + suspicious),
+  but only pinned to exactly that name. It never lifts a
+  MalwareBazaar hit, a CIRCL KnownMalicious flag, a MetaDefender
+  detection, a missing / unanalysed VirusTotal answer, the
+  protected-name or high-risk (PowerShell / cmd ...) rules. The
+  gate reads the file from main's trusted checkout (a PR can not
+  override its own lines); changing it needs the owner / an admin.
+  The proof entry records the override ("maintainer_override").
 - Promotion (--promote): after the gate ran on a staging PR
   (branch aegis-community-staging*), the entries that passed
   EVERY check are written onto a fresh copy of main and proposed
@@ -137,6 +148,36 @@ PROOF_FIELDS = (
     "first_verified",
     "last_checked",
 )
+
+# Maintainer overrides: "sha256|name|reason", one per line.
+# Read from the trusted checkout (main) for reputation decisions.
+OVERRIDES_REL = "maintainer_overrides.txt"
+
+OVERRIDE_FIELD = "maintainer_override"
+
+# An override covers at most this many VirusTotal malicious +
+# suspicious verdicts; above that it is not applied (a file that
+# starts to be detected widely needs a new look).
+OVERRIDE_MAX_DETECTIONS = int(
+    os.environ.get(
+        "AEGIS_OVERRIDE_MAX_DETECTIONS",
+        "5",
+    )
+)
+
+# Plain text only: no Markdown / HTML / mentions, no "|".
+OVERRIDE_REASON_RE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9 .,:;()/+_'#&=-]{2,199}$"
+)
+
+# Who may change maintainer_overrides.txt in a PR.
+OVERRIDE_ASSOCIATIONS = {
+    "OWNER",
+}
+
+OVERRIDE_PERMISSIONS = {
+    "admin",
+}
 
 ISO_UTC_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
@@ -1113,6 +1154,16 @@ def collect_all(
         )
 
     # --------------------------------------------------------
+    # maintainer_overrides.txt (format, no blacklisted hash)
+    # --------------------------------------------------------
+
+    check_overrides(
+        data,
+        ref,
+        blacklist_hashes,
+    )
+
+    # --------------------------------------------------------
     # Production whitelist: ONLY "name|sha256" lines (the app
     # reads this file raw; name-only / bare-hash candidates
     # live in pending/community_whitelist_candidates.txt).
@@ -1202,8 +1253,13 @@ def is_count(
 
 def proof_entry_problem(
     entry,
+    overrides: dict | None = None,
 ):
-    """Why a proof entry is malformed (None if it is fine)."""
+    """Why a proof entry is malformed (None if it is fine).
+
+    overrides: maintainer_overrides.txt of the same tree; an
+    entry with "maintainer_override" needs a matching line there.
+    """
 
     if not isinstance(
         entry,
@@ -1211,11 +1267,15 @@ def proof_entry_problem(
     ):
         return "entry must be an object"
 
-    if set(entry) != set(PROOF_FIELDS):
+    if set(entry) not in (
+        set(PROOF_FIELDS),
+        set(PROOF_FIELDS) | {OVERRIDE_FIELD},
+    ):
 
         return (
             "fields must be exactly "
             + ", ".join(PROOF_FIELDS)
+            + f" (plus {OVERRIDE_FIELD} when overridden)"
         )
 
     name = entry["name"]
@@ -1242,6 +1302,36 @@ def proof_entry_problem(
     ):
         return f"invalid sha256 {sha256!r}"
 
+    overridden = OVERRIDE_FIELD in entry
+
+    if overridden:
+
+        marker = entry[OVERRIDE_FIELD]
+
+        if (
+            not isinstance(marker, dict)
+            or set(marker) != {"reason"}
+            or not isinstance(marker["reason"], str)
+            or not OVERRIDE_REASON_RE.fullmatch(
+                marker["reason"]
+            )
+        ):
+            return (
+                f"{OVERRIDE_FIELD} must be "
+                '{"reason": "<plain text>"}'
+            )
+
+        if override_for(
+            sha256,
+            name,
+            overrides or {},
+        ) is None:
+            return (
+                f"{OVERRIDE_FIELD} has no matching "
+                f"'{sha256}|{name}|...' line in "
+                f"{OVERRIDES_REL}"
+            )
+
     sources = entry["sources"]
 
     if (
@@ -1262,7 +1352,8 @@ def proof_entry_problem(
     if "malwarebazaar" not in sources:
         return "sources must include malwarebazaar"
 
-    if not (
+    # Overridden: the maintainer vouches instead of CIRCL / VT.
+    if not overridden and not (
         "circl" in sources
         or "virustotal" in sources
     ):
@@ -1292,7 +1383,24 @@ def proof_entry_problem(
                 "{malicious, suspicious, engines} counts"
             )
 
-        if vt["malicious"] > 0:
+        if overridden:
+
+            if (
+                vt["engines"] == 0
+                or vt["malicious"] + vt["suspicious"]
+                > OVERRIDE_MAX_DETECTIONS
+            ):
+                return (
+                    "virustotal reports "
+                    f"{vt['malicious']} malicious + "
+                    f"{vt['suspicious']} suspicious of "
+                    f"{vt['engines']} engines; a maintainer "
+                    "override covers at most "
+                    f"{OVERRIDE_MAX_DETECTIONS} on an "
+                    "analysed file"
+                )
+
+        elif vt["malicious"] > 0:
 
             return (
                 f"virustotal reports {vt['malicious']} "
@@ -1300,7 +1408,9 @@ def proof_entry_problem(
             )
 
         limit = (
-            0
+            OVERRIDE_MAX_DETECTIONS
+            if overridden
+            else 0
             if is_protected_name(name)
             else VT_MAX_SUSPICIOUS
         )
@@ -1311,6 +1421,18 @@ def proof_entry_problem(
                 f"virustotal reports {vt['suspicious']} "
                 f"suspicious detections (limit {limit})"
             )
+
+    if overridden and vt is None:
+        return (
+            f"{OVERRIDE_FIELD} needs the VirusTotal "
+            "counts it overrides"
+        )
+
+    if overridden and "virustotal" in sources:
+        return (
+            "virustotal can not be a source of an "
+            "overridden entry"
+        )
 
     if "virustotal" in sources and (
         vt is None
@@ -1401,13 +1523,18 @@ def read_proof(
 
     order = []
 
+    overrides = load_overrides(
+        ref
+    )[0]
+
     for index, entry in enumerate(
         raw["entries"],
         1,
     ):
 
         problem = proof_entry_problem(
-            entry
+            entry,
+            overrides,
         )
 
         if problem:
@@ -1524,6 +1651,306 @@ def check_proof_sync(
             f"{'y has' if len(stale) == 1 else 'ies have'} "
             f"no line in {GLOBAL_WHITELIST_PATH}: "
             f"{short_list(stale)}"
+        )
+
+
+# ============================================================
+# MAINTAINER OVERRIDES (maintainer_overrides.txt)
+#
+#     <sha256>|<name>|<reason>
+#
+# A known false positive: the hash is accepted in the whitelist
+# despite up to OVERRIDE_MAX_DETECTIONS VirusTotal verdicts, but
+# only as "<name>|<sha256>" with exactly this name. Nothing else
+# is relaxed (MalwareBazaar, CIRCL KnownMalicious, MetaDefender,
+# VirusTotal "not found" / "no analysis", protected / high-risk
+# names, structure). Reputation decisions read the file from the
+# trusted checkout (main), so an override has to be merged (by
+# the owner / an admin) before a staging run can use it.
+# ============================================================
+
+def parse_overrides(
+    text: str | None,
+):
+    """Return ({sha256: {"name", "reason", "line"}}, errors)."""
+
+    entries = {}
+
+    errors = []
+
+    for number, raw in enumerate(
+        (text or "").splitlines(),
+        1,
+    ):
+
+        line = raw.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        where = f"{OVERRIDES_REL}:{number}"
+
+        parts = line.split(
+            NAME_SHA256_SEPARATOR
+        )
+
+        if len(parts) != 3:
+
+            errors.append(
+                f"{where}: expected 'sha256|name|reason' "
+                "(exactly two '|')"
+            )
+
+            continue
+
+        digest, name, reason = (
+            part.strip()
+            for part in parts
+        )
+
+        digest = digest.lower()
+
+        name = name.lower()
+
+        if not re.fullmatch(
+            r"[0-9a-f]{64}",
+            digest,
+        ):
+
+            errors.append(
+                f"{where}: invalid sha256 {digest!r}"
+            )
+
+            continue
+
+        if (
+            not NAME_RE.fullmatch(name)
+            or classify(name)[0] != "name"
+            or any(
+                token in name
+                for token in FORBIDDEN_SUBSTRINGS
+            )
+        ):
+
+            errors.append(
+                f"{where}: invalid name {name!r}"
+            )
+
+            continue
+
+        if (
+            is_protected_name(name)
+            or name in SUSPICIOUS_WL_NAMES
+        ):
+
+            errors.append(
+                f"{where}: protected / high-risk name "
+                f"{name!r} can never be overridden"
+            )
+
+            continue
+
+        if not OVERRIDE_REASON_RE.fullmatch(
+            reason
+        ):
+
+            errors.append(
+                f"{where}: reason must be 3-200 characters "
+                "of plain text (letters, digits, "
+                "space . , : ; ( ) / + _ ' # & = -)"
+            )
+
+            continue
+
+        if digest in entries:
+
+            errors.append(
+                f"{where}: duplicate override for {digest} "
+                f"(also line {entries[digest]['line']})"
+            )
+
+            continue
+
+        entries[digest] = {
+            "name": name,
+            "reason": reason,
+            "line": number,
+        }
+
+    return entries, errors
+
+
+def load_overrides(
+    ref: str | None = None,
+):
+    """Overrides at a git ref, or in the checkout (ref None)."""
+
+    path = ROOT / OVERRIDES_REL
+
+    if ref:
+
+        text = git_file(
+            ref,
+            path,
+        )
+
+    elif path.exists():
+
+        try:
+            text = path.read_text(
+                encoding="utf-8",
+                errors="strict",
+            )
+        except Exception as exc:
+            return {}, [
+                f"{OVERRIDES_REL}: unreadable: {exc}"
+            ]
+
+    else:
+        text = None
+
+    return parse_overrides(
+        text
+    )
+
+
+def override_for(
+    sha256: str,
+    name: str,
+    overrides: dict | None = None,
+):
+    """The override for exactly this name|sha256, else None."""
+
+    if overrides is None:
+        overrides = load_overrides()[0]
+
+    entry = overrides.get(
+        str(sha256).lower()
+    )
+
+    if (
+        entry
+        and entry["name"] == str(name).lower()
+        and not is_protected_name(entry["name"])
+        and entry["name"] not in SUSPICIOUS_WL_NAMES
+    ):
+        return entry
+
+    return None
+
+
+def override_applies(
+    key_id: str,
+    data: dict,
+):
+    """The trusted override for a whitelist hash of this run.
+
+    Applies only if EVERY whitelist entry with this hash is
+    "<override name>|<sha256>" (a bare hash or another name
+    never inherits it).
+    """
+
+    overrides = load_overrides()[0]
+
+    entry = overrides.get(
+        key_id
+    )
+
+    if not entry:
+        return None
+
+    names = []
+
+    for item in data.get(
+        "entries",
+        [],
+    ):
+
+        if (
+            item.get("feed_type") != "whitelist"
+            or reputation_indicator(item) != key_id
+        ):
+            continue
+
+        pinned = (
+            split_name_sha256(
+                str(item.get("normalized", ""))
+            )
+            if item.get("kind") == "name_sha256"
+            else None
+        )
+
+        names.append(
+            pinned[0] if pinned else None
+        )
+
+    if not names or any(
+        override_for(key_id, name, overrides) is None
+        for name in names
+    ):
+        return None
+
+    return entry
+
+
+def vt_override_ok(
+    record: dict,
+) -> bool:
+    """VirusTotal analysed the file and the detections are few."""
+
+    return (
+        record.get("provider") == "virustotal"
+        and record.get("status") == "found"
+        and record.get("engines", 0) > 0
+        and (
+            record.get("malicious", 0)
+            + record.get("suspicious", 0)
+        ) <= OVERRIDE_MAX_DETECTIONS
+    )
+
+
+def override_hint(
+    key_id: str,
+    data: dict,
+) -> str:
+    """Why an existing override did not apply ("" if none)."""
+
+    entry = load_overrides()[0].get(
+        key_id
+    )
+
+    if not entry:
+        return ""
+
+    return (
+        f" (maintainer override for {entry['name']!r} not "
+        "applied: every whitelist line with this hash must be "
+        f"'{entry['name']}|<sha256>')"
+    )
+
+
+def check_overrides(
+    data: dict,
+    ref: str | None,
+    blacklist_hashes: set,
+):
+    """Format of maintainer_overrides.txt at ref (or checkout)."""
+
+    overrides, errors = load_overrides(
+        ref
+    )
+
+    data["errors"].extend(
+        errors
+    )
+
+    for digest in sorted(
+        set(overrides) & blacklist_hashes
+    ):
+
+        data["errors"].append(
+            f"{OVERRIDES_REL}:{overrides[digest]['line']}: "
+            f"hash {digest} is in the production blacklist"
         )
 
 
@@ -2753,11 +3180,56 @@ def judge_record(
             )
         )
 
+        override = (
+            override_applies(
+                key_id,
+                data,
+            )
+            if feed_type == "whitelist"
+            else None
+        )
+
+        # ------------------------------------------------
+        # Maintainer override (known false positive):
+        # a few detections are accepted, never more.
+        # ------------------------------------------------
+
+        if (
+            override
+            and (
+                malicious >= 1
+                or suspicious > VT_MAX_SUSPICIOUS
+            )
+        ):
+
+            if vt_override_ok(record):
+
+                data["warnings"].append(
+                    "VirusTotal: whitelist hash has "
+                    f"{malicious} malicious / {suspicious} "
+                    f"suspicious of {record.get('engines', 0)} "
+                    "engines; accepted by maintainer override "
+                    f"({OVERRIDES_REL}:{override['line']} "
+                    f"{override['name']!r}: "
+                    f"{override['reason']}): {key_id}"
+                )
+
+            else:
+
+                data["errors"].append(
+                    "VirusTotal: whitelist hash has "
+                    f"{malicious} malicious / {suspicious} "
+                    "suspicious detections, more than a "
+                    "maintainer override covers "
+                    f"({OVERRIDE_MAX_DETECTIONS}); override "
+                    f"not applied: {key_id}"
+                )
+
         # ------------------------------------------------
         # NEVER allow known malicious hash into whitelist
         # ------------------------------------------------
 
-        if (
+        elif (
             feed_type == "whitelist"
             and malicious >= 1
         ):
@@ -2767,6 +3239,10 @@ def judge_record(
                 "hash has "
                 f"{malicious} malicious "
                 f"detections: {key_id}"
+                + override_hint(
+                    key_id,
+                    data,
+                )
             )
 
         # ------------------------------------------------
@@ -3582,6 +4058,7 @@ def whitelist_hash_verdict(
     kind: str,
     protected: bool,
     data: dict,
+    override: dict | None = None,
 ):
     """None if this whitelist hash is verified known-good, else why not.
 
@@ -3616,6 +4093,14 @@ def whitelist_hash_verdict(
     vt_ok = vt_counts_as_known_good(
         definitive.get("virustotal") or {},
         protected,
+    ) or (
+        # maintainer override: few detections on an analysed
+        # file (never for protected names)
+        override is not None
+        and not protected
+        and vt_override_ok(
+            definitive.get("virustotal") or {}
+        )
     )
 
     required = {
@@ -3734,6 +4219,10 @@ def verify_whitelist_hashes(
             info["kind"],
             info["protected"],
             data,
+            override_applies(
+                key_id,
+                data,
+            ),
         )
 
         if reason:
@@ -4037,6 +4526,34 @@ def phase_validate(
                 f"(author: {association or 'UNKNOWN'}, "
                 f"permission: {permission or 'unknown'}): "
                 f"{listed}"
+            )
+
+    # --------------------------------------------------------
+    # maintainer_overrides.txt: the owner / admins only. It
+    # takes effect after the merge (the gate reads main's copy).
+    # --------------------------------------------------------
+
+    if OVERRIDES_REL in non_feed:
+
+        if (
+            association in OVERRIDE_ASSOCIATIONS
+            or permission in OVERRIDE_PERMISSIONS
+        ):
+
+            data["warnings"].append(
+                f"PR changes {OVERRIDES_REL} (maintainer "
+                "overrides for VirusTotal false positives); "
+                "review every line - it applies to staging "
+                "runs after this PR is merged"
+            )
+
+        else:
+
+            data["errors"].append(
+                f"PR changes {OVERRIDES_REL}; only the "
+                "repository owner / admins may do that "
+                f"(author: {association or 'UNKNOWN'}, "
+                f"permission: {permission or 'unknown'})"
             )
 
     # --------------------------------------------------------
@@ -4505,6 +5022,11 @@ def evaluate_entry(
             )
         )
 
+        override = override_applies(
+            indicator,
+            data,
+        )
+
         reason = whitelist_hash_verdict(
             indicator,
             "sha256"
@@ -4512,12 +5034,25 @@ def evaluate_entry(
             else kind,
             protected,
             data,
+            override,
         )
 
         if reason:
             reasons.append(
                 reason
             )
+
+        elif override and not vt_counts_as_known_good(
+            definitive_records(indicator, data).get(
+                "virustotal"
+            ) or {},
+            protected,
+        ) and not circl_counts_as_known_good(
+            definitive_records(indicator, data).get(
+                "circl"
+            ) or {}
+        ):
+            verdict["override"] = override["reason"]
 
     reasons = list(
         dict.fromkeys(
@@ -4575,8 +5110,29 @@ def build_proof_entry(
 
     vt = definitive.get("virustotal")
 
-    if vt and vt_counts_as_known_good(vt, protected):
+    vt_ok = bool(
+        vt
+        and vt_counts_as_known_good(vt, protected)
+    )
+
+    if vt_ok:
         sources.append("virustotal")
+
+    # Recorded only when the override is what let it in.
+    override = (
+        override_for(
+            sha256,
+            name,
+        )
+        if (
+            vt
+            and not vt_ok
+            and "circl" not in sources
+            and not protected
+            and vt_override_ok(vt)
+        )
+        else None
+    )
 
     md = definitive.get("metadefender")
 
@@ -4606,7 +5162,7 @@ def build_proof_entry(
         else now_iso
     )
 
-    return {
+    entry = {
         "name": name,
         "sha256": sha256,
         "sources": sources,
@@ -4623,6 +5179,13 @@ def build_proof_entry(
         "last_checked": last_checked,
     }
 
+    if override:
+        entry[OVERRIDE_FIELD] = {
+            "reason": override["reason"],
+        }
+
+    return entry
+
 
 def proof_text(
     entries: dict,
@@ -4634,7 +5197,11 @@ def proof_text(
             "entries": [
                 {
                     field: entries[key][field]
-                    for field in PROOF_FIELDS
+                    for field in (
+                        *PROOF_FIELDS,
+                        OVERRIDE_FIELD,
+                    )
+                    if field in entries[key]
                 }
                 for key in sorted(entries)
             ],
@@ -5407,7 +5974,14 @@ def promotion_texts(
                         "promote": "verified in this run",
                         "carried": "verified in an earlier run",
                         "needs_hash": "NEEDS HASH candidate",
-                    }[verdict["status"]],
+                    }[verdict["status"]]
+                    + (
+                        " (maintainer override: "
+                        + verdict["override"]
+                        + ")"
+                        if verdict.get("override")
+                        else ""
+                    ),
                 )
                 for verdict in promoted
             ],
