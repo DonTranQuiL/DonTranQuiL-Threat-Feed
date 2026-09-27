@@ -1,0 +1,16 @@
+# AEGIS maintainer overrides: known VirusTotal false positives.
+#
+#   <sha256>|<name>|<reason>
+#
+# - Only the repository owner / admins may change this file (the gate
+#   fails the PR otherwise), and it takes effect after the merge: the
+#   gate reads main's copy, never the PR's.
+# - An override lets exactly "<name>|<sha256>" into the whitelist despite
+#   up to 5 VirusTotal malicious + suspicious verdicts. It never lifts a
+#   MalwareBazaar hit, a CIRCL KnownMalicious flag, a MetaDefender
+#   detection, a hash VirusTotal has not analysed, or the protected /
+#   high-risk name rules (powershell.exe, cmd.exe, lsass.exe, ...).
+# - The promoted proof in verified_whitelist.json carries
+#   "maintainer_override": {"reason": ...}. Removing a line here makes the
+#   gate fail on the matching whitelist line until it is removed too.
+# - Reason: plain text, 3-200 characters, no '|'.
