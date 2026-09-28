@@ -132,14 +132,35 @@ jobs:
             number="$INPUT_PR"
           fi
 
+          # Staging inbox mode (Sentinel upload): only for an OPEN
+          # DRAFT PR from this repository on an aegis-community-staging*
+          # branch, read live from the API (a re-run replays the old
+          # event payload). The PR is never merged; every line is
+          # judged one by one by the promotion job, so only structural
+          # problems fail the check. A draft can not be merged, and
+          # "Ready for review" starts a new run here in strict mode.
+          staging=false
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then
+            live="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
+              --jq '[.state, (.draft|tostring), .head.ref, (.head.repo.full_name // ""), .head.sha] | @tsv' 2>/dev/null || true)"
+            IFS=$'\t' read -r l_state l_draft l_ref l_repo l_sha <<< "$live" || true
+            if [ "${l_state:-}" = "open" ] && [ "${l_draft:-}" = "true" ] \
+                && [ "${l_repo:-}" = "$GITHUB_REPOSITORY" ] && [ "${l_sha:-}" = "$head_sha" ]; then
+              case "${l_ref:-}" in
+                aegis-community-staging*) staging=true ;;
+              esac
+            fi
+          fi
+
           {
             echo "number=$number"
             echo "head_sha=$head_sha"
             echo "base_sha=$(git rev-parse HEAD)"
             echo "author=$author"
             echo "association=$association"
+            echo "staging=$staging"
           } >> "$GITHUB_OUTPUT"
-          echo "Gating PR #$number at $head_sha (author $author, $association)"
+          echo "Gating PR #$number at $head_sha (author $author, $association, staging inbox: $staging)"
 
       - name: Restore CIRCL reputation cache
         id: circl-cache
@@ -217,12 +238,18 @@ jobs:
           PR_HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           PR_AUTHOR_ASSOCIATION: ${{ steps.pr.outputs.association }}
           PR_AUTHOR_PERMISSION: ${{ steps.author.outputs.permission }}
+          STAGING_INBOX: ${{ steps.pr.outputs.staging }}
         run: |
+          staging_flag=()
+          if [ "$STAGING_INBOX" = "true" ]; then
+            staging_flag=(--staging-inbox)
+          fi
           python .github/scripts/validate_community_feed.py \
             --base-sha "$PR_BASE_SHA" \
             --head-sha "$PR_HEAD_SHA" \
             --author-association "$PR_AUTHOR_ASSOCIATION" \
-            --author-permission "$PR_AUTHOR_PERMISSION"
+            --author-permission "$PR_AUTHOR_PERMISSION" \
+            "${staging_flag[@]}"
 
       # No key needed. A hash CIRCL knows (NSRL, Windows builds, ...)
       # is known-good and skips VirusTotal; CIRCL errors never count
@@ -651,6 +678,47 @@ jobs:
             gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$STAGING_PR/comments" -F "body=@$comment" > /dev/null
           fi
           echo "Promotion report posted on staging PR #$STAGING_PR."
+
+      # Housekeeping: a staging PR is never merged. Once its gate is
+      # green (every line handled: promoted, already on main, queued
+      # in pending/needs_review.txt, retried or ignored) and the
+      # promotion / report above succeeded, close it and delete its
+      # timestamped branch. Only if it is still an open draft from
+      # this repository at exactly the commit this run processed
+      # (a newer push is handled by its own run). A red gate
+      # (structural problem) keeps it open for a human.
+      - name: Close processed staging pull request
+        if: success() && needs.security-gate.result == 'success'
+        env:
+          PROMOTION_PR: ${{ steps.pr.outputs.number || steps.existing.outputs.number }}
+        run: |
+          set -euo pipefail
+          live="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$STAGING_PR" \
+            --jq '[.state, (.draft|tostring), .head.ref, (.head.repo.full_name // ""), .head.sha] | @tsv')"
+          IFS=$'\t' read -r l_state l_draft l_ref l_repo l_sha <<< "$live"
+          if [ "$l_state" != "open" ] || [ "$l_draft" != "true" ] \
+              || [ "$l_repo" != "$GITHUB_REPOSITORY" ] || [ "$l_sha" != "$STAGING_SHA" ]; then
+            echo "Staging PR #$STAGING_PR changed since this run (state=$l_state draft=$l_draft head=$l_sha); left as is."
+            exit 0
+          fi
+          case "$l_ref" in
+            aegis-community-staging*) ;;
+            *) echo "::error::not a staging branch: $l_ref"; exit 1 ;;
+          esac
+          note="$RUNNER_TEMP/aegis-staging-close.md"
+          {
+            echo "Processed automatically: every line of this upload is handled (see the report above)."
+            echo "Verified lines go to main via the auto-merged promotion PR${PROMOTION_PR:+ (#$PROMOTION_PR)}; rejected / not-yet-verified lines are recorded in \`pending/needs_review.txt\`. Closing this staging inbox and deleting its branch."
+          } > "$note"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$STAGING_PR/comments" -F "body=@$note" > /dev/null
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$STAGING_PR" -f state=closed > /dev/null
+          ref_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$l_ref" --jq .object.sha 2>/dev/null || true)"
+          if [ "$ref_sha" = "$STAGING_SHA" ]; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$l_ref"
+            echo "Closed staging PR #$STAGING_PR and deleted branch $l_ref."
+          else
+            echo "Closed staging PR #$STAGING_PR; branch $l_ref kept (moved to ${ref_sha:-?})."
+          fi
 
   # ------------------------------------------------------------------
   # Auto-merge of the promotion PR.

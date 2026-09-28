@@ -87,7 +87,18 @@ Important:
   EVERY check are written onto a fresh copy of main and proposed
   in the "AEGIS verified promotion" PR; rejected lines stay in
   staging and are listed with their reasons. The promotion PR is
-  gated again and merged by a human.
+  gated again and squash-merged automatically once green.
+- Staging inbox mode (--staging-inbox, set by the workflow only for
+  an OPEN DRAFT PR from this repository on an aegis-community-
+  staging* branch): the staging PR is never merged, every line is
+  judged one by one by the promotion job (promoted / queued for
+  review / retried / ignored), so per-line problems (reputation
+  rejections, failed lookups, lines without a proof entry) do not
+  fail the check. It still FAILS on structural problems: changes
+  outside the feed by non-members, too many lines, a rewritten
+  proof, a rejected / missing API key, feed errors not tied to one
+  of the PR's lines. Marking the PR ready for review re-runs the
+  gate in strict mode (red), so a staging PR can never be merged.
 - Community intelligence never automatically becomes local trust.
 - Community intelligence never automatically kills a local process.
 """
@@ -4811,6 +4822,11 @@ def phase_validate(
         "total_feed_entries"
     ] = total
 
+    # Errors so far come from the whole-feed check of the head.
+    data["feed_check_errors"] = len(
+        data["errors"]
+    )
+
     # --------------------------------------------------------
     # Inspect PR additions
     # --------------------------------------------------------
@@ -4858,12 +4874,18 @@ def phase_validate(
     # Files outside the community feed
     # --------------------------------------------------------
 
+    all_changed = changed_paths(
+        args.base_sha,
+        args.head_sha,
+    )
+
+    data["proof_changed"] = (
+        PROOF_REL in all_changed
+    )
+
     non_feed = [
         path
-        for path in changed_paths(
-            args.base_sha,
-            args.head_sha,
-        )
+        for path in all_changed
         if path not in FEED_PATHS
     ]
 
@@ -4966,11 +4988,18 @@ def phase_validate(
 
     data["needs_hash"] = []
 
+    # Indices of errors raised for ONE added line (staging mode).
+    line_error_ids = set()
+
     for (
         path,
         feed_type,
         value,
     ) in additions:
+
+        errors_before = len(
+            data["errors"]
+        )
 
         kind, normalized = classify(
             value
@@ -5031,6 +5060,13 @@ def phase_validate(
             data["warnings"].append(
                 policy[1]
             )
+
+        line_error_ids.update(
+            range(
+                errors_before,
+                len(data["errors"]),
+            )
+        )
 
     # --------------------------------------------------------
     # Proofs: entries for this PR's production whitelist
@@ -5110,6 +5146,19 @@ def phase_validate(
         )
 
     # --------------------------------------------------------
+    # Staging inbox: split per-line from structural errors
+    # --------------------------------------------------------
+
+    if getattr(args, "staging_inbox", False):
+
+        data["staging_mode"] = True
+
+        data["structural_errors"] = staging_structural_errors(
+            data,
+            line_error_ids,
+        )
+
+    # --------------------------------------------------------
     # Initial decision
     # --------------------------------------------------------
 
@@ -5155,6 +5204,105 @@ def phase_validate(
 
 
 # ============================================================
+# STAGING INBOX MODE
+#
+# A staging PR (Sentinel upload, draft, never merged) is only a
+# data inbox: the promotion job judges each of its lines on its
+# own and routes it to the promotion PR (passed every check),
+# pending/needs_review.txt (rejected / not verified yet) or drops
+# it (IGNORED_NAMES). A problem with ONE line is therefore handled
+# and must not turn the staging check red. Red is kept for
+# problems a human has to act on.
+# ============================================================
+
+# Reputation-phase errors that need a human (bad / missing API
+# key): every line would otherwise wait forever.
+STAGING_ACTION_MARKERS = (
+    "rejected the API key",
+    "is not configured",
+)
+
+
+def staging_structural_errors(
+    data: dict,
+    line_error_ids: set,
+) -> list:
+    """Validate-phase errors a human must act on (staging inbox).
+
+    NOT structural (handled by the promotion job):
+      - whole-feed checks of the staging head (errors[:feed_check_errors]):
+        the head is an old copy of main plus Sentinel's lines and is
+        never merged; the promotion rebuilds the feed from the
+        current main, re-checks the COMPLETE result and demotes a
+        line that breaks it to needs_review (or fails loudly);
+      - errors raised for one added line (line_error_ids).
+    Structural: everything else from the validate phase (too many
+    lines, changes outside the feed by non-members, maintainer
+    overrides, rewritten proofs) and any change of the proof file
+    (only the promotion job writes verified_whitelist.json).
+    """
+
+    feed_check = int(
+        data.get("feed_check_errors", 0) or 0
+    )
+
+    structural = [
+        error
+        for index, error in enumerate(
+            data.get("errors") or []
+        )
+        if index >= feed_check
+        and index not in line_error_ids
+    ]
+
+    if data.get("proof_changed"):
+
+        structural.append(
+            f"staging PR changes {PROOF_REL}; only the "
+            "promotion job writes proof entries"
+        )
+
+    return structural
+
+
+def staging_finalize(
+    data: dict,
+):
+    """Staging inbox decision: FAIL only on structural errors."""
+
+    later = (data.get("errors") or [])[
+        int(data.get("validate_errors", 0) or 0):
+    ]
+
+    structural = list(
+        data.get("structural_errors") or []
+    ) + [
+        error
+        for error in later
+        # a proof the PR ships that contradicts this run
+        if error.startswith(f"{PROOF_REL}:")
+        or any(
+            marker in error
+            for marker in STAGING_ACTION_MARKERS
+        )
+    ]
+
+    structural = list(
+        dict.fromkeys(
+            structural
+        )
+    )
+
+    data["structural_errors"] = structural
+
+    data["decision"] = (
+        "FAIL"
+        if structural
+        else "PASS"
+    )
+
+
+# ============================================================
 # FINAL DECISION
 # ============================================================
 
@@ -5182,6 +5330,12 @@ def finalize(
         else "FAIL"
     )
 
+    if data.get("staging_mode"):
+
+        staging_finalize(
+            data
+        )
+
     save_report(
         data,
         report,
@@ -5202,6 +5356,17 @@ def finalize(
         )
 
         sys.exit(1)
+
+    if data.get("staging_mode"):
+
+        print(
+            "AEGIS SECURITY GATE: PASS (staging inbox - every "
+            "line is judged one by one by the promotion job; "
+            f"{len(data.get('errors') or [])} per-line finding(s) "
+            "are handled there, none is structural)"
+        )
+
+        return
 
     print(
         "AEGIS SECURITY GATE: PASS"
@@ -6478,6 +6643,14 @@ def build_promotion(
         "generated": now_iso,
         "counts": {},
         "lines": verdicts,
+        # Staging inbox gate outcome (red only when structural).
+        "staging_gate": {
+            "mode": bool(data.get("staging_mode")),
+            "decision": data.get("decision"),
+            "structural_errors": list(
+                data.get("structural_errors") or []
+            ),
+        },
     }
 
     for verdict in verdicts:
@@ -6607,6 +6780,31 @@ def promotion_texts(
         "",
         *summary,
     ]
+
+    gate = plan.get("staging_gate") or {}
+
+    if gate.get("mode"):
+
+        structural = gate.get("structural_errors") or []
+
+        comment += [
+            "",
+            (
+                "**Staging gate: green** - every line above was "
+                "handled (promoted, already on main, queued for "
+                "review, retried or ignored). A red staging gate "
+                "means a structural problem that needs a human."
+            )
+            if not structural
+            else (
+                f"**Staging gate: red** - {len(structural)} "
+                "structural problem(s) need a human (per-line "
+                "findings are handled automatically):"
+            ),
+        ] + [
+            f"- {md_cell(error, 300)}"
+            for error in structural[:20]
+        ]
 
     for status, title, columns in (
         (
@@ -6828,6 +7026,15 @@ def main():
         help=(
             "PR author repository permission "
             "(admin, write, read, none)"
+        ),
+    )
+
+    parser.add_argument(
+        "--staging-inbox",
+        action="store_true",
+        help=(
+            "The PR is an open draft staging inbox (set by the "
+            "workflow): only structural errors fail the check"
         ),
     )
 
