@@ -1,20 +1,14 @@
 brave.exe
 chrome.exe
 firefox.exe
-interrupts
-memcompression
-memory compression
 mighost.exe
 node.exe
 operagx.exe
 py.exe
-registry
 smartscreen.exe
 spoolsv.exe
 sppsvc.exe
-system idle process
 systemsettingsbroker.exe
 lenovovantage-(genericmessagingaddin).exe
 notepad++.exe
-setup.exe
 winrar.exe
