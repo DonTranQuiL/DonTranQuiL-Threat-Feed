@@ -1,0 +1,12 @@
+# AEGIS human review queue. Lines the gate could not promote.
+# Never trusted automatically. A human reviews and may open a PR.
+#
+# Format (one per line, '#' starts a comment):
+#   <feed-line>|<disposition>|<reason>
+#
+# disposition:
+#   review       - needs a human look (e.g. low VT detections that may be false positives)
+#   hard_reject  - policy / known malware; kept only for the record
+#
+# Maintained by the AEGIS promotion job. Do not add production trust from here.
+
