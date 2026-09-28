@@ -1,9 +1,6 @@
-aicwifiservice.exe
 brave.exe
 chrome.exe
 firefox.exe
-imfcore.exe
-imfsrv.exe
 interrupts
 memcompression
 memory compression
@@ -15,11 +12,8 @@ registry
 smartscreen.exe
 spoolsv.exe
 sppsvc.exe
-ss_conn_service.exe
 system idle process
 systemsettingsbroker.exe
-usbipd.exe
-imftips.exe
 lenovovantage-(genericmessagingaddin).exe
 notepad++.exe
 setup.exe
