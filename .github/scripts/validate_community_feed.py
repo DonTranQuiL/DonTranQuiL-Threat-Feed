@@ -75,6 +75,13 @@ Important:
   gate reads the file from main's trusted checkout (a PR can not
   override its own lines); changing it needs the owner / an admin.
   The proof entry records the override ("maintainer_override").
+- pending/needs_review.txt is the human review queue: rejected
+  and not-yet-verifiable staging lines (with reasons), maintained
+  by the promotion job, never auto-trusted. Hard rejects
+  (PowerShell / cmd / MalwareBazaar / CIRCL KnownMalicious) are
+  marked hard_reject; everything else is review.
+- IGNORED_NAMES (e.g. aegis-ransomware-guard) are dropped forever
+  and never re-enter pending or needs_review.
 - Promotion (--promote): after the gate ran on a staging PR
   (branch aegis-community-staging*), the entries that passed
   EVERY check are written onto a fresh copy of main and proposed
@@ -122,6 +129,24 @@ FEEDS = {
 
     "pending_blacklist":
         ROOT / "pending" / "community_blacklist_candidates.txt",
+}
+
+
+# Human review queue (promotion job writes it; never production trust).
+NEEDS_REVIEW_REL = "pending/needs_review.txt"
+
+NEEDS_REVIEW_PATH = ROOT / NEEDS_REVIEW_REL
+
+# disposition values in needs_review.txt.
+REVIEW_DISPOSITIONS = {
+    "review",
+    "hard_reject",
+}
+
+# Names the gate permanently drops (Sentinel / AEGIS internal, etc.).
+# They never enter production feeds, pending candidates or needs_review.
+IGNORED_NAMES = {
+    "aegis-ransomware-guard",
 }
 
 
@@ -200,6 +225,7 @@ FEED_PATHS = {
     for path in FEEDS.values()
 } | {
     PROOF_REL,
+    NEEDS_REVIEW_REL,
 }
 
 
@@ -1164,6 +1190,105 @@ def collect_all(
     )
 
     # --------------------------------------------------------
+    # pending/needs_review.txt (format only; never production)
+    # --------------------------------------------------------
+
+    review_text = None
+
+    if ref:
+
+        review_text = git_file(
+            ref,
+            NEEDS_REVIEW_PATH,
+        )
+
+    elif NEEDS_REVIEW_PATH.exists():
+
+        try:
+            review_text = NEEDS_REVIEW_PATH.read_text(
+                encoding="utf-8",
+                errors="strict",
+            )
+        except Exception as exc:
+            data["errors"].append(
+                f"{NEEDS_REVIEW_REL}: unreadable: {exc}"
+            )
+            review_text = ""
+
+    if review_text is not None:
+
+        review_entries, review_errors = parse_needs_review(
+            review_text
+        )
+
+        data["errors"].extend(
+            review_errors
+        )
+
+        # The review queue is never production trust.
+        for key, entry in sorted(
+            review_entries.items()
+        ):
+
+            digest = value_indicator(
+                key
+            )
+
+            if key in whitelist_values or (
+                digest
+                and digest in whitelist_hashes
+            ):
+
+                data["errors"].append(
+                    f"{NEEDS_REVIEW_REL}:{entry['line']}: "
+                    f"{key!r} is also in "
+                    f"{GLOBAL_WHITELIST_PATH}; remove it from "
+                    "one of the two files"
+                )
+
+    # --------------------------------------------------------
+    # IGNORED_NAMES never live in the production feeds; in the
+    # pending files they are only warned about (the promotion
+    # job removes them from main automatically).
+    # --------------------------------------------------------
+
+    for key, path in FEEDS.items():
+
+        for line_number, value in feed_lines(
+            path,
+            ref,
+        ):
+
+            hit = entry_ignored_name(
+                value
+            )
+
+            if not hit:
+                continue
+
+            where = (
+                f"{path.relative_to(ROOT)}:{line_number}"
+            )
+
+            if key in {
+                "whitelist",
+                "blacklist",
+            }:
+
+                data["errors"].append(
+                    f"{where}: {hit!r} is permanently "
+                    "ignored and never allowed in a "
+                    "production feed"
+                )
+
+            else:
+
+                data["warnings"].append(
+                    f"{where}: {hit!r} is permanently "
+                    "ignored (removed by the next promotion)"
+                )
+
+    # --------------------------------------------------------
     # Production whitelist: ONLY "name|sha256" lines (the app
     # reads this file raw; name-only / bare-hash candidates
     # live in pending/community_whitelist_candidates.txt).
@@ -1952,6 +2077,274 @@ def check_overrides(
             f"{OVERRIDES_REL}:{overrides[digest]['line']}: "
             f"hash {digest} is in the production blacklist"
         )
+
+
+# ============================================================
+# HUMAN REVIEW QUEUE (pending/needs_review.txt)
+#
+#     <feed-line>|<disposition>|<reason>
+#
+# disposition is "review" (human may later open a PR) or
+# "hard_reject" (policy / known malware; kept only as a record).
+# The feed-line may itself contain one "|" (name|sha256); parse
+# from the right. Maintained by the promotion job; never trusted.
+# ============================================================
+
+def sanitize_review_reason(
+    reason: str,
+) -> str:
+    """Plain-text reason safe for needs_review.txt."""
+
+    text = " ".join(
+        str(reason or "unspecified")
+        .replace("|", " ")
+        .split()
+    )[:200].rstrip()
+
+    if not text:
+        text = "unspecified"
+
+    if not OVERRIDE_REASON_RE.fullmatch(
+        text
+    ):
+        # Fall back to a conservative subset.
+        text = "".join(
+            char
+            for char in text
+            if char.isalnum() or char in " .,:;()/+_'-"
+        )[:200] or "unspecified"
+
+    return text
+
+
+def parse_needs_review(
+    text: str | None,
+):
+    """Return ({normalized_value: entry}, errors)."""
+
+    entries = {}
+
+    errors = []
+
+    for number, raw in enumerate(
+        (text or "").splitlines(),
+        1,
+    ):
+
+        line = raw.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        where = f"{NEEDS_REVIEW_REL}:{number}"
+
+        parts = line.rsplit(
+            NAME_SHA256_SEPARATOR,
+            2,
+        )
+
+        if len(parts) != 3:
+
+            errors.append(
+                f"{where}: expected "
+                "'<feed-line>|<disposition>|<reason>'"
+            )
+
+            continue
+
+        value, disposition, reason = (
+            part.strip()
+            for part in parts
+        )
+
+        disposition = disposition.lower()
+
+        value = value.lower()
+
+        if disposition not in REVIEW_DISPOSITIONS:
+
+            errors.append(
+                f"{where}: disposition must be "
+                + " or ".join(
+                    sorted(REVIEW_DISPOSITIONS)
+                )
+            )
+
+            continue
+
+        kind, normalized = classify(
+            value
+        )
+
+        if kind == "name" and not NAME_RE.fullmatch(
+            normalized
+        ):
+
+            errors.append(
+                f"{where}: invalid feed-line {value!r}"
+            )
+
+            continue
+
+        if kind == "name" and (
+            normalized in IGNORED_NAMES
+            or is_protected_name(normalized)
+            and disposition != "hard_reject"
+        ):
+            # Protected names in the queue must be hard_reject;
+            # ignored names must not appear at all.
+            if normalized in IGNORED_NAMES:
+
+                errors.append(
+                    f"{where}: ignored name {normalized!r} "
+                    "must not appear in the review queue"
+                )
+
+                continue
+
+        reason = sanitize_review_reason(
+            reason
+        )
+
+        if normalized in entries:
+
+            errors.append(
+                f"{where}: duplicate review entry for "
+                f"{normalized!r}"
+            )
+
+            continue
+
+        entries[normalized] = {
+            "value": normalized,
+            "disposition": disposition,
+            "reason": reason,
+            "line": number,
+        }
+
+    return entries, errors
+
+
+def needs_review_text(
+    entries: dict,
+) -> str:
+    """Canonical file contents for pending/needs_review.txt."""
+
+    header = (
+        "# AEGIS human review queue. Lines the gate could not "
+        "promote.\n"
+        "# Never trusted automatically. A human reviews and may "
+        "open a PR.\n"
+        "#\n"
+        "# Format (one per line, '#' starts a comment):\n"
+        "#   <feed-line>|<disposition>|<reason>\n"
+        "#\n"
+        "# disposition:\n"
+        "#   review       - needs a human look (e.g. low VT "
+        "detections that may be false positives)\n"
+        "#   hard_reject  - policy / known malware; kept only "
+        "for the record\n"
+        "#\n"
+        "# Maintained by the AEGIS promotion job. Do not add "
+        "production trust from here.\n"
+    )
+
+    rows = []
+
+    for key in sorted(
+        entries
+    ):
+
+        entry = entries[key]
+
+        rows.append(
+            f"{entry['value']}|"
+            f"{entry['disposition']}|"
+            f"{entry['reason']}"
+        )
+
+    body = "\n".join(
+        rows
+    )
+
+    return header + (
+        ("\n" + body + "\n")
+        if body
+        else "\n"
+    )
+
+
+def review_disposition_for(
+    verdict: dict,
+) -> str:
+    """review or hard_reject for a rejected / retry verdict."""
+
+    blob = " ".join(
+        verdict.get("reasons") or []
+    ).lower()
+
+    hard_markers = (
+        "high-risk",
+        "protected operating-system",
+        "protected ",
+        "malwarebazaar",
+        "knownmalicious",
+        "metadefender cloud: whitelist hash flagged",
+    )
+
+    if any(
+        marker in blob
+        for marker in hard_markers
+    ):
+        return "hard_reject"
+
+    name = None
+
+    normalized = verdict.get(
+        "normalized"
+    ) or verdict.get(
+        "value"
+    ) or ""
+
+    pinned = split_name_sha256(
+        str(normalized)
+    )
+
+    if pinned:
+        name = pinned[0]
+
+    elif classify(str(normalized))[0] == "name":
+        name = str(normalized)
+
+    if name and (
+        name in SUSPICIOUS_WL_NAMES
+        or is_protected_name(name)
+    ):
+        return "hard_reject"
+
+    return "review"
+
+
+def entry_ignored_name(
+    value: str,
+):
+    """The IGNORED_NAMES hit for a feed value, else None."""
+
+    pinned = split_name_sha256(
+        value
+    )
+
+    if pinned and pinned[0] in IGNORED_NAMES:
+        return pinned[0]
+
+    kind, normalized = classify(
+        value
+    )
+
+    if kind == "name" and normalized in IGNORED_NAMES:
+        return normalized
+
+    return None
 
 
 # ============================================================
@@ -4880,7 +5273,7 @@ def evaluate_entry(
 ) -> dict:
     """Verdict for ONE staging line, independent of all others.
 
-    status: promote | needs_hash | retry | rejected
+    status: promote | needs_hash | retry | rejected | ignored
     """
 
     path = str(
@@ -4913,6 +5306,29 @@ def evaluate_entry(
 
         verdict["reasons"].append(
             f"not a community feed line: {path!r}"
+        )
+
+        return verdict
+
+    ignored = entry_ignored_name(
+        value.lower().strip()
+    )
+
+    if ignored:
+
+        kind, normalized = classify(
+            value.lower().strip()
+        )
+
+        verdict.update(
+            kind=kind,
+            normalized=normalized,
+            status="ignored",
+            reasons=[
+                f"ignored permanently "
+                f"({ignored!r} is an AEGIS / Sentinel "
+                "internal name and is never accepted)"
+            ],
         )
 
         return verdict
@@ -5256,6 +5672,259 @@ def rewrite_feed(
     )
 
 
+def review_key(
+    value: str,
+):
+    """Safe normalized feed value for the review queue, else None."""
+
+    value = str(
+        value or ""
+    ).strip().lower()
+
+    if (
+        not value
+        or len(value) > MAX_LINE
+        or any(
+            char in value
+            for char in FORBIDDEN_CHARS
+        )
+    ):
+        return None
+
+    kind, normalized = classify(
+        value
+    )
+
+    if kind == "name":
+
+        if not NAME_RE.fullmatch(normalized):
+            return None
+
+        if any(
+            token in normalized
+            for token in FORBIDDEN_SUBSTRINGS
+        ):
+            return None
+
+    elif kind == "name_sha256":
+
+        name = split_name_sha256(
+            normalized
+        )[0]
+
+        if (
+            not NAME_RE.fullmatch(name)
+            or any(
+                token in name
+                for token in FORBIDDEN_SUBSTRINGS
+            )
+        ):
+            return None
+
+    return normalized
+
+
+def update_needs_review(
+    verdicts: list,
+    carry_ref: str | None,
+    paths: dict,
+    data: dict | None = None,
+) -> dict:
+    """Merge this run's rejected / retry lines into the queue.
+
+    - dedupe by normalized feed value (latest reason wins)
+    - drop entries that are now in a production / pending feed
+      (resolved) or ignored
+    - never write a line that is in global_whitelist.txt
+    """
+
+    queue, _errors = parse_needs_review(
+        NEEDS_REVIEW_PATH.read_text(encoding="utf-8")
+        if NEEDS_REVIEW_PATH.exists()
+        else None
+    )
+
+    if carry_ref:
+
+        carried, _errors = parse_needs_review(
+            git_file(
+                carry_ref,
+                NEEDS_REVIEW_PATH,
+            )
+        )
+
+        for key, entry in carried.items():
+            queue.setdefault(key, entry)
+
+    added = 0
+
+    updated = 0
+
+    for verdict in verdicts:
+
+        if verdict["status"] not in {
+            "rejected",
+            "retry",
+        }:
+            continue
+
+        key = review_key(
+            verdict.get("normalized")
+            or verdict.get("value")
+        )
+
+        if not key or entry_ignored_name(key):
+            continue
+
+        indicator = value_indicator(
+            key
+        )
+
+        reasons = []
+
+        for reason in verdict.get("reasons") or []:
+
+            text = str(reason)
+
+            if indicator:
+                text = text.replace(
+                    NAME_SHA256_SEPARATOR + indicator,
+                    "",
+                ).replace(
+                    indicator,
+                    "(hash)",
+                )
+
+            reasons.append(
+                text
+            )
+
+        prefix = (
+            "not verified yet: "
+            if verdict["status"] == "retry"
+            else ""
+        )
+
+        vt = (
+            definitive_records(
+                indicator,
+                data,
+            ).get("virustotal")
+            if indicator and data
+            else None
+        )
+
+        if vt and vt.get("status") == "found":
+
+            prefix += (
+                f"VT {vt.get('malicious', 0)}/"
+                f"{vt.get('engines', 0)} malicious"
+                + (
+                    f", {vt.get('suspicious', 0)} suspicious"
+                    if vt.get("suspicious")
+                    else ""
+                )
+                + "; "
+            )
+
+        entry = {
+            "value": key,
+            "disposition": review_disposition_for(
+                verdict
+            ),
+            "reason": sanitize_review_reason(
+                prefix + "; ".join(reasons)
+            ),
+            "line": 0,
+        }
+
+        if key in queue:
+
+            if (
+                queue[key]["disposition"],
+                queue[key]["reason"],
+            ) != (
+                entry["disposition"],
+                entry["reason"],
+            ):
+                updated += 1
+
+        else:
+            added += 1
+
+        queue[key] = entry
+
+    # Resolved: the value (or its hash) is now in a feed file.
+    in_feeds = set()
+
+    feed_hashes = set()
+
+    for rel, path in paths.items():
+
+        for _, value in feed_lines(
+            path
+        ):
+
+            normalized = classify(
+                value
+            )[1]
+
+            in_feeds.add(
+                normalized
+            )
+
+            if rel == GLOBAL_WHITELIST_PATH:
+
+                digest = value_indicator(
+                    normalized
+                )
+
+                if digest:
+                    feed_hashes.add(
+                        digest
+                    )
+
+    removed = 0
+
+    for key in list(queue):
+
+        digest = value_indicator(
+            key
+        )
+
+        if (
+            key in in_feeds
+            or (digest and digest in feed_hashes)
+            or entry_ignored_name(key)
+        ):
+            del queue[key]
+            removed += 1
+
+    if queue or NEEDS_REVIEW_PATH.exists():
+
+        NEEDS_REVIEW_PATH.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        NEEDS_REVIEW_PATH.write_text(
+            needs_review_text(queue),
+            encoding="utf-8",
+        )
+
+    return {
+        "entries": len(queue),
+        "added": added,
+        "updated": updated,
+        "resolved": removed,
+        "hard_reject": sum(
+            1
+            for entry in queue.values()
+            if entry["disposition"] == "hard_reject"
+        ),
+    }
+
+
 def build_promotion(
     data: dict,
     carry_ref: str | None = None,
@@ -5286,6 +5955,12 @@ def build_promotion(
     proof_original = (
         proof_path.read_text(encoding="utf-8")
         if proof_path.exists()
+        else None
+    )
+
+    review_original = (
+        NEEDS_REVIEW_PATH.read_text(encoding="utf-8")
+        if NEEDS_REVIEW_PATH.exists()
         else None
     )
 
@@ -5383,6 +6058,9 @@ def build_promotion(
                     continue
 
                 if normalized in hard_rejected:
+                    continue
+
+                if entry_ignored_name(normalized):
                     continue
 
                 scratch = {
@@ -5594,8 +6272,14 @@ def build_promotion(
             for rel in paths
         }
 
+        # Junk that must never come back (IGNORED_NAMES) is also
+        # removed from main's own files.
         removals = {
-            rel: set()
+            rel: {
+                value
+                for value in main_values[rel]
+                if entry_ignored_name(value)
+            }
             for rel in paths
         }
 
@@ -5675,6 +6359,24 @@ def build_promotion(
                 encoding="utf-8",
             )
 
+        # Human review queue (pending/needs_review.txt): this
+        # run's rejected / retry lines in, resolved lines out.
+        # Rebuilt from main's copy on every attempt.
+        if review_original is None:
+            NEEDS_REVIEW_PATH.unlink(missing_ok=True)
+        else:
+            NEEDS_REVIEW_PATH.write_text(
+                review_original,
+                encoding="utf-8",
+            )
+
+        review_counts = update_needs_review(
+            verdicts,
+            carry_ref,
+            paths,
+            data,
+        )
+
         check = result()
 
         collect_all(
@@ -5725,6 +6427,14 @@ def build_promotion(
                     encoding="utf-8",
                 )
 
+            if review_original is None:
+                NEEDS_REVIEW_PATH.unlink(missing_ok=True)
+            else:
+                NEEDS_REVIEW_PATH.write_text(
+                    review_original,
+                    encoding="utf-8",
+                )
+
             raise SystemExit(
                 "Promotion would introduce feed errors: "
                 + "; ".join(new_errors[:5])
@@ -5756,9 +6466,14 @@ def build_promotion(
         proof_path.read_text(encoding="utf-8")
         if proof_path.exists()
         else None
-    ) != proof_original
+    ) != proof_original or (
+        NEEDS_REVIEW_PATH.read_text(encoding="utf-8")
+        if NEEDS_REVIEW_PATH.exists()
+        else None
+    ) != review_original
 
     plan = {
+        "review": review_counts,
         "changed": changed,
         "generated": now_iso,
         "counts": {},
@@ -5846,8 +6561,9 @@ STATUS_LABEL = (
     ("carried", "kept from the open promotion PR"),
     ("needs_hash", "name-only - proposed as NEEDS HASH candidate"),
     ("already_on_main", "already on main (nothing to do)"),
-    ("retry", "not verified yet - retried on the next run"),
-    ("rejected", "rejected - stays in staging"),
+    ("retry", "not verified yet - queued for human review + retried"),
+    ("rejected", "rejected - queued for human review"),
+    ("ignored", "ignored permanently (never re-queued)"),
 )
 
 
@@ -5885,7 +6601,9 @@ def promotion_texts(
         "the staging inbox and is never merged: lines that "
         "passed every check go to the "
         f"**{PROMOTION_TITLE}** PR (branch "
-        f"`{PROMOTION_BRANCH}`), the rest stays here.",
+        f"`{PROMOTION_BRANCH}`, auto-merged when its gate is "
+        f"green); rejected / not-yet-verifiable lines are "
+        f"recorded in `{NEEDS_REVIEW_REL}` for a human.",
         "",
         *summary,
     ]
@@ -5955,8 +6673,11 @@ def promotion_texts(
         "",
         "- The security gate runs on this PR again (cached "
         "answers, few or no new API calls).",
-        "- Merge it yourself once the gate passes; nothing is "
-        "merged automatically.",
+        "- When that gate is green the promotion bot "
+        "squash-merges this PR into main automatically.",
+        f"- Rejected / not-yet-verifiable lines are recorded in "
+        f"`{NEEDS_REVIEW_REL}` (human review queue, never "
+        "auto-trusted).",
         f"- Do not edit this branch by hand: `{PROMOTION_BRANCH}` "
         "is regenerated from main (force-pushed) after every "
         "staging run; lines still waiting here are kept.",

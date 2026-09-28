@@ -352,7 +352,8 @@ jobs:
           echo "Whitelist hashes must be known-good (CIRCL or"
           echo "VirusTotal) and unknown to MalwareBazaar."
           echo "Blacklist entries require validation."
-          echo "No automatic merge is performed."
+          echo "Only the bot's promotion PR is auto-merged, and"
+          echo "only after this gate and every other check pass."
           echo ""
           echo "=============================================="
 
@@ -365,7 +366,10 @@ jobs:
   # fresh copy of main (branch aegis-verified-promotion, with proof
   # entries in verified_whitelist.json) and opens / updates the
   # "AEGIS verified promotion" PR. That PR is gated again (cached
-  # answers) and merged by a human. Rejected lines are listed in a
+  # answers) and squash-merged automatically by the auto-merge job
+  # below once that gate (and every other check) is green. Rejected /
+  # not-yet-verifiable lines go into pending/needs_review.txt (human
+  # review queue, never trusted) in the same PR and are listed in a
   # comment on the staging PR.
   #
   # Token for the push + PR: the "AEGIS Promotion Bot" GitHub App when
@@ -647,3 +651,150 @@ jobs:
             gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$STAGING_PR/comments" -F "body=@$comment" > /dev/null
           fi
           echo "Promotion report posted on staging PR #$STAGING_PR."
+
+  # ------------------------------------------------------------------
+  # Auto-merge of the promotion PR.
+  #
+  # Runs after the gate succeeded on the promotion PR itself
+  # (pull_request_target from the App's push, i.e. the run the ruleset
+  # counts). Before merging it re-verifies, read-only with
+  # GITHUB_TOKEN:
+  #   - the PR is open, not a draft, head branch aegis-verified-promotion
+  #     in this repository, base = default branch, opened by the App bot;
+  #   - the PR head is still exactly the commit this gate run checked;
+  #   - every commit on the PR was made by the App bot;
+  #   - the PR only touches feed / proof / pending files;
+  #   - EVERY check run and commit status on that commit finished green
+  #     (success / skipped / neutral), including at least one successful
+  #     "AEGIS Threat Feed Security Gate"; anything failed or cancelled
+  #     stops the merge, anything still running is waited for.
+  # The squash merge itself uses the App token with
+  # --match-head-commit, and GitHub still enforces the main ruleset
+  # (PR + required gate check, no bypass).
+  # ------------------------------------------------------------------
+  auto-merge:
+    name: AEGIS promotion auto-merge
+    needs: security-gate
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      needs.security-gate.result == 'success' &&
+      github.event.pull_request.head.ref == 'aegis-verified-promotion' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
+      github.event.pull_request.user.type == 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # GITHUB_TOKEN is only used to READ the PR and its checks.
+    permissions:
+      checks: read
+      statuses: read
+      pull-requests: read
+      contents: read
+
+    concurrency:
+      group: aegis-promotion-auto-merge
+      cancel-in-progress: false
+
+    env:
+      PROMOTION_BRANCH: aegis-verified-promotion
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      SELF_CHECK: AEGIS promotion auto-merge
+      REQUIRED_CHECK: AEGIS Threat Feed Security Gate
+      AEGIS_APP_CONFIGURED: ${{ secrets.AEGIS_APP_ID != '' && secrets.AEGIS_APP_PRIVATE_KEY != '' }}
+
+    steps:
+
+      - name: Create GitHub App token
+        id: app-token
+        if: env.AEGIS_APP_CONFIGURED == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.AEGIS_APP_ID }}
+          private-key: ${{ secrets.AEGIS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verify promotion pull request
+        id: verify
+        if: steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          bot="${APP_SLUG}[bot]"
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          field() { jq -r "$1" <<< "$pr"; }
+          fail() { echo "::error::Not auto-merging PR #$PR_NUMBER: $*"; exit 1; }
+          [ "$(field .state)" = "open" ] || fail "PR is not open"
+          [ "$(field .draft)" = "false" ] || fail "PR is a draft"
+          [ "$(field .head.ref)" = "$PROMOTION_BRANCH" ] || fail "head branch is not $PROMOTION_BRANCH"
+          [ "$(field .head.repo.full_name)" = "$GITHUB_REPOSITORY" ] || fail "head is not in this repository"
+          [ "$(field .base.ref)" = "$(field .base.repo.default_branch)" ] || fail "base is not the default branch"
+          [ "$(field .user.login)" = "$bot" ] || fail "PR author is not $bot"
+          [ "$(field .head.sha)" = "$HEAD_SHA" ] || fail "PR head moved since this gate run"
+
+          # Every commit on the PR comes from the promotion bot.
+          others="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" \
+            --jq ".[] | select((.author.login // \"\") != \"$bot\" or (.committer.login // \"\") != \"$bot\") | .sha")"
+          [ -z "$others" ] || fail "commits not made by $bot: $others"
+
+          # Only feed / proof / pending files.
+          files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+          while IFS= read -r f; do
+            case "$f" in
+              global_whitelist.txt|global_blacklist.txt|verified_whitelist.json) ;;
+              pending/community_whitelist_candidates.txt|pending/community_blacklist_candidates.txt|pending/needs_review.txt) ;;
+              '') ;;
+              *) fail "PR touches a non-feed file: $f" ;;
+            esac
+          done <<< "$files"
+          echo "PR #$PR_NUMBER by $bot at $HEAD_SHA touches only feed files."
+
+      - name: Wait until every check on the head commit is green
+        if: steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::Not auto-merging PR #$PR_NUMBER: $*"; exit 1; }
+          for _ in $(seq 1 60); do
+            # Latest run per check name (a re-run supersedes an older one).
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \
+              --jq '.check_runs | group_by(.name) | map(max_by(.id)) | .[] | [.name, .status, (.conclusion // "")] | @tsv')"
+            others="$(awk -F'\t' -v self="$SELF_CHECK" '$1 != self' <<< "$runs")"
+            bad="$(awk -F'\t' '$2 == "completed" && $3 != "success" && $3 != "skipped" && $3 != "neutral"' <<< "$others")"
+            [ -z "$bad" ] || fail "check(s) not green: $(tr '\t\n' ' ;' <<< "$bad")"
+            gate_ok="$(awk -F'\t' -v req="$REQUIRED_CHECK" '$1 == req && $2 == "completed" && $3 == "success"' <<< "$others")"
+            [ -n "$gate_ok" ] || fail "no successful '$REQUIRED_CHECK' check run on $HEAD_SHA"
+            pending="$(awk -F'\t' '$2 != "completed"' <<< "$others")"
+            statuses="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/status" \
+              --jq '[.statuses[] | select(.state != "success")] | map(.context + "=" + .state) | join(" ")')"
+            case "$statuses" in
+              *=failure*|*=error*) fail "commit status not green: $statuses" ;;
+            esac
+            if [ -z "$pending" ] && [ -z "$statuses" ]; then
+              echo "All checks on $HEAD_SHA are green:"
+              printf '%s\n' "$others"
+              exit 0
+            fi
+            echo "Waiting for: $(cut -f1 <<< "$pending" | tr '\n' ';') $statuses"
+            sleep 15
+          done
+          fail "checks still running after 15 minutes"
+
+      - name: Squash-merge promotion pull request
+        if: steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash \
+            --match-head-commit "$HEAD_SHA" \
+            --subject "$PR_TITLE (#$PR_NUMBER)"
+          echo "Promotion PR #$PR_NUMBER squash-merged at $HEAD_SHA."

@@ -22,19 +22,25 @@ Shared threat feed configuration for DonTranQuiL projects.
   `"maintainer_override": {"reason": ...}`.
 - `pending/community_whitelist_candidates.txt` holds candidates, e.g. name-only entries that
   still need a hash ("needs hash"). They are never trusted.
+- `pending/needs_review.txt` is the human review queue (`<feed-line>|<disposition>|<reason>`).
+  disposition is `review` (e.g. a few VirusTotal detections) or `hard_reject` (PowerShell /
+  cmd / MalwareBazaar / CIRCL KnownMalicious). Maintained by the promotion job; never trusted.
 
 ## How community entries reach main
 
-1. The Sentinel worker pushes new entries to a staging branch (`aegis-community-staging*`) and
-   keeps one staging PR open. That PR is an inbox: it is never merged.
+1. The Sentinel worker opens a new draft staging PR per upload on a timestamped branch
+   (`aegis-community-staging-<timestamp>`). That PR is an inbox: it is never merged.
 2. The **AEGIS Threat Feed Security Gate** checks every new line (structure, protected names,
    CIRCL hashlookup, VirusTotal, MalwareBazaar, MetaDefender if configured).
 3. The **AEGIS verified promotion** job then copies ONLY the lines that passed every check onto a
    fresh copy of main (branch `aegis-verified-promotion`, including their proof entries) and
-   opens or updates the PR "AEGIS verified promotion". Rejected lines stay in staging and are
-   listed with their reasons in a comment on the staging PR.
-4. The gate runs again on the promotion PR (cached answers, few or no new lookups). A maintainer
-   merges it; nothing is merged automatically.
+   opens or updates the PR "AEGIS verified promotion". Rejected and not-yet-verifiable lines are
+   recorded in `pending/needs_review.txt` (human review queue, never auto-trusted) in the same PR,
+   and listed with their reasons in a comment on the staging PR. Names in `IGNORED_NAMES`
+   (e.g. Sentinel's own `aegis-ransomware-guard`) are dropped forever.
+4. The gate runs again on the promotion PR (cached answers, few or no new lookups). When that
+   check (and every other check on the head commit) is green, the **AEGIS promotion auto-merge**
+   job squash-merges it into main. Nothing else is merged automatically.
 
 The promotion job pushes and opens the PR as the **AEGIS Promotion Bot** GitHub App when the
 repository secrets `AEGIS_APP_ID` and `AEGIS_APP_PRIVATE_KEY` exist (App installed on this
