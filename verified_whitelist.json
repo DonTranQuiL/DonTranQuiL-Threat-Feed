@@ -1701,6 +1701,21 @@
       "last_checked": "2026-09-26T18:06:18Z"
     },
     {
+      "name": "srtasks.exe",
+      "sha256": "693105226758b0e608db6679985f4cb96d2eea050cdf1924d33838534e608639",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-28T22:32:33Z",
+      "last_checked": "2026-09-28T22:32:33Z"
+    },
+    {
       "name": "ss_conn_service.exe",
       "sha256": "de8fad3e99d0e90ce8aba15d604cf1e80f16c9e4b92f1a41a63d56cf7d96a414",
       "sources": [
@@ -2213,6 +2228,21 @@
       },
       "first_verified": "2026-09-26T18:06:55Z",
       "last_checked": "2026-09-26T18:06:55Z"
+    },
+    {
+      "name": "vssvc.exe",
+      "sha256": "7f38c0c54279f69e0f278687db6f186d4a55b4c81bd7a3c583f6e47585c2ffea",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 67
+      },
+      "first_verified": "2026-09-28T22:32:30Z",
+      "last_checked": "2026-09-28T22:32:30Z"
     },
     {
       "name": "waasmedicagent.exe",
