@@ -32,6 +32,23 @@
       "last_checked": "2026-09-26T18:04:09Z"
     },
     {
+      "name": "aicwifiservice.exe",
+      "sha256": "b00d43f33025e26b828c1fd5b86631c30209900ee89f021c996823276771a5d8",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 2,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-27T22:32:36Z",
+      "last_checked": "2026-09-27T22:32:36Z",
+      "maintainer_override": {
+        "reason": "AIC Semiconductor AIC8800 USB Wi-Fi mode-switch service; VT 2/71; owner-reviewed false positive"
+      }
+    },
+    {
       "name": "alg.exe",
       "sha256": "32a50802d672b2ddc08b34fc767ce4399763d6ab06f777ebc9b6b0d22a2a7f2c",
       "sources": [
@@ -583,6 +600,23 @@
       "last_checked": "2026-09-26T18:04:50Z"
     },
     {
+      "name": "grok bot.exe",
+      "sha256": "7408a54d801ce5d2c0bc6ac564d66aa8948979b7867cc4432ca61a9eaa30cede",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 1,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-09-27T22:32:38Z",
+      "last_checked": "2026-09-27T22:32:38Z",
+      "maintainer_override": {
+        "reason": "Owner's own application (Grok Bot); VT 1/68; owner-reviewed false positive"
+      }
+    },
+    {
       "name": "ibmpmsvc.exe",
       "sha256": "6e4bd990eea19dd3c8c0c0b1b94aa5494c4bb4bc21a85b1102b297036f2c31ac",
       "sources": [
@@ -673,6 +707,40 @@
       "last_checked": "2026-09-26T18:04:59Z"
     },
     {
+      "name": "imfanalyzer.exe",
+      "sha256": "2d622b1818e148111100dc3c61c291734689ed0b2dc07c56c067c74dd41ae10a",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 3,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-27T22:32:39Z",
+      "last_checked": "2026-09-27T22:32:39Z",
+      "maintainer_override": {
+        "reason": "IObit Malware Fighter component; VT 3/71 low-count detections; owner-reviewed false positive"
+      }
+    },
+    {
+      "name": "imfcore.exe",
+      "sha256": "aa562a0289bdc9881d3b66241aa75cd49a67c4b2ce65ff153752f92feca260d7",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 1,
+        "suspicious": 0,
+        "engines": 66
+      },
+      "first_verified": "2026-09-27T22:32:40Z",
+      "last_checked": "2026-09-27T22:32:40Z",
+      "maintainer_override": {
+        "reason": "IObit Malware Fighter component; VT 1/66; owner-reviewed false positive"
+      }
+    },
+    {
       "name": "imfelamsvc.exe",
       "sha256": "19474eaed17dc020689aa2b8a69e231ef7e8a1558d6e70c67d00e4d1214e63b3",
       "sources": [
@@ -686,6 +754,40 @@
       },
       "first_verified": "2026-09-26T18:05:04Z",
       "last_checked": "2026-09-26T18:05:04Z"
+    },
+    {
+      "name": "imfsrv.exe",
+      "sha256": "301f9f8e334f1c369336739bb32fa7913db8dd4db8e0202f3bd552beea994d0f",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 1,
+        "suspicious": 0,
+        "engines": 67
+      },
+      "first_verified": "2026-09-27T22:32:42Z",
+      "last_checked": "2026-09-27T22:32:42Z",
+      "maintainer_override": {
+        "reason": "IObit Malware Fighter service; VT 1/67; owner-reviewed false positive"
+      }
+    },
+    {
+      "name": "imftips.exe",
+      "sha256": "f177747dab4ccd8cbaa93371ba2bc561e64ed28659f4084387355512fabe25f9",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 1,
+        "suspicious": 0,
+        "engines": 66
+      },
+      "first_verified": "2026-09-27T22:32:43Z",
+      "last_checked": "2026-09-27T22:32:43Z",
+      "maintainer_override": {
+        "reason": "IObit Malware Fighter tips component; VT 1/66; owner-reviewed false positive"
+      }
     },
     {
       "name": "intelaudioservice.exe",
@@ -836,6 +938,21 @@
       },
       "first_verified": "2026-09-26T18:05:20Z",
       "last_checked": "2026-09-26T18:05:20Z"
+    },
+    {
+      "name": "lpremove.exe",
+      "sha256": "cc01740edaf6882c61db7ae252e13c9dd49052b2decce0be46f361169822ba81",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-27T22:32:45Z",
+      "last_checked": "2026-09-27T22:32:45Z"
     },
     {
       "name": "lsaiso.exe",
@@ -1494,6 +1611,23 @@
       "last_checked": "2026-09-26T18:06:18Z"
     },
     {
+      "name": "ss_conn_service.exe",
+      "sha256": "de8fad3e99d0e90ce8aba15d604cf1e80f16c9e4b92f1a41a63d56cf7d96a414",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 2,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-09-27T22:32:48Z",
+      "last_checked": "2026-09-27T22:32:48Z",
+      "maintainer_override": {
+        "reason": "Samsung Mobile USB Connectivity Service (DEVGURU); VT 2/68, VT reputation +7; owner-reviewed false positive"
+      }
+    },
+    {
       "name": "ssh.exe",
       "sha256": "8e1212d6b10bbab3dfd85077c1a7d0b60373fde702dfa9ea8c57924793bdb317",
       "sources": [
@@ -1837,6 +1971,23 @@
       },
       "first_verified": "2026-09-27T14:32:14Z",
       "last_checked": "2026-09-27T14:32:14Z"
+    },
+    {
+      "name": "usbipd.exe",
+      "sha256": "78fd94ca4125db7407c77bd7b985971a1ac95705a331401976f748770035325b",
+      "sources": [
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 1,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-27T22:32:51Z",
+      "last_checked": "2026-09-27T22:32:51Z",
+      "maintainer_override": {
+        "reason": "usbipd-win 5.3.0 (Frans van Dorsselaer); identical to the official GitHub release MSI; VT 1/70"
+      }
     },
     {
       "name": "useroobebroker.exe",
