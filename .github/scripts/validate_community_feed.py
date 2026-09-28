@@ -6660,6 +6660,19 @@ def build_promotion(
             + 1
         )
 
+    # Lines the gate already skipped because main has them (no
+    # lookups spent) also count as "already on main" in the report.
+    skipped = int(
+        data.get("already_in_base", 0) or 0
+    )
+
+    if skipped:
+
+        plan["counts"]["already_on_main"] = (
+            plan["counts"].get("already_on_main", 0)
+            + skipped
+        )
+
     return plan
 
 
