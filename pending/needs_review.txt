@@ -10,3 +10,4 @@
 #
 # Maintained by the AEGIS promotion job. Do not add production trust from here.
 
+ss_conn_service2.exe|ad20bdfb11acd97dd10a17a637c477160184dfe828f00724fc1f396fd3109e80|review|VT 1/71 malicious; VirusTotal: whitelist hash has 1 malicious detections: (hash); whitelist hash (hash) is unknown to every reputation provider that can vouch for it (CIRCL hashlookup, VirusTotal with

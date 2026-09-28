@@ -955,6 +955,21 @@
       "last_checked": "2026-09-26T18:05:20Z"
     },
     {
+      "name": "logonui.exe",
+      "sha256": "ab94c66e893012ca56de0fe8fb4deb40ea8f6da6763ee7831cc083edec50bb69",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-09-28T09:34:12Z",
+      "last_checked": "2026-09-28T09:34:12Z"
+    },
+    {
       "name": "lpremove.exe",
       "sha256": "cc01740edaf6882c61db7ae252e13c9dd49052b2decce0be46f361169822ba81",
       "sources": [
@@ -1206,6 +1221,21 @@
       "last_checked": "2026-09-26T18:05:38Z"
     },
     {
+      "name": "opera.exe",
+      "sha256": "47d40e5659e32307f0546f57da60f58ef7c147a86b7a2e21f1088161e791ea31",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-28T09:34:13Z",
+      "last_checked": "2026-09-28T09:34:13Z"
+    },
+    {
       "name": "opera_autoupdate.exe",
       "sha256": "20cee840e0c3d2f1d1343983034310c09415a1d202d781abb04b6f4608114f18",
       "sources": [
@@ -1219,6 +1249,36 @@
       },
       "first_verified": "2026-09-26T18:05:40Z",
       "last_checked": "2026-09-26T18:05:40Z"
+    },
+    {
+      "name": "opera_autoupdate.exe",
+      "sha256": "481a2a909830f2a3d9592a22d1ece3d33c8a17d1ad123a42c358a68a667ac5e8",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-28T09:34:15Z",
+      "last_checked": "2026-09-28T09:34:15Z"
+    },
+    {
+      "name": "opera_crashreporter.exe",
+      "sha256": "2d42cf92d7cca0e2214a45ed657ac79d325e601d0bec8d2d2a045f24214b1b8f",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-28T09:34:17Z",
+      "last_checked": "2026-09-28T09:34:17Z"
     },
     {
       "name": "opera_crashreporter.exe",
@@ -1249,6 +1309,21 @@
       },
       "first_verified": "2026-09-26T18:05:43Z",
       "last_checked": "2026-09-26T18:05:43Z"
+    },
+    {
+      "name": "powermgrinst.exe",
+      "sha256": "c6ea97bd5592b87afa3f41b6fe6d86b0ae8e129ca24994dabc4a6a63f773c952",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-09-28T09:34:18Z",
+      "last_checked": "2026-09-28T09:34:18Z"
     },
     {
       "name": "privacyiconclient.exe",
@@ -1988,6 +2063,21 @@
       "last_checked": "2026-09-28T08:33:54Z"
     },
     {
+      "name": "udcinfinstaller.exe",
+      "sha256": "643ceaccef75f52b9f82234cb4e21a1d14c95a55289d9fefb92505ef183d1bc6",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-09-28T09:34:20Z",
+      "last_checked": "2026-09-28T09:34:20Z"
+    },
+    {
       "name": "udclientservice.exe",
       "sha256": "9eff87b1c75006529a5a1db84ae8edbfed0b5467462aa7000adc9d89c163173f",
       "sources": [
@@ -2228,6 +2318,21 @@
       },
       "first_verified": "2026-09-26T21:57:40Z",
       "last_checked": "2026-09-26T21:57:40Z"
+    },
+    {
+      "name": "wsl.exe",
+      "sha256": "d81dfc0236fa3ca297d6745c3475b25a3b7fea17aa109c95b646edb13a31322a",
+      "sources": [
+        "virustotal",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-28T09:34:22Z",
+      "last_checked": "2026-09-28T09:34:22Z"
     },
     {
       "name": "wslservice.exe",
