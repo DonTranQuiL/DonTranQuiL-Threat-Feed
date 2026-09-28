@@ -41,6 +41,17 @@ Shared threat feed configuration for DonTranQuiL projects.
 4. The gate runs again on the promotion PR (cached answers, few or no new lookups). When that
    check (and every other check on the head commit) is green, the **AEGIS promotion auto-merge**
    job squash-merges it into main. Nothing else is merged automatically.
+5. Once every line of the upload is handled, the staging PR is closed and its branch deleted
+   automatically.
+
+What the gate colour means on a staging PR (an open **draft** on an `aegis-community-staging*`
+branch): **green** = every line was handled (promoted, already on main, queued in
+`pending/needs_review.txt`, "not verified yet" because a lookup failed or the quota ran out,
+or ignored). **Red** = a problem a human must fix: changes outside the feed by a non-member,
+too many lines, edits to `verified_whitelist.json` / proof rewrites, or a missing / rejected
+VirusTotal or MalwareBazaar API key. Staging PRs are never merged: a draft cannot be merged, and
+"Ready for review" re-runs the gate in strict mode (red). Every other PR, including the promotion
+PR, gets the strict gate: any failed or missing scan is red, and nothing is merged.
 
 The promotion job pushes and opens the PR as the **AEGIS Promotion Bot** GitHub App when the
 repository secrets `AEGIS_APP_ID` and `AEGIS_APP_PRIVATE_KEY` exist (App installed on this
