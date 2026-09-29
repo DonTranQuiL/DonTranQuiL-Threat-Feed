@@ -44,9 +44,10 @@ jobs:
     #   CIRCL          120 x ~1 s          ~  2 min
     #   VirusTotal     120 x 16 s (4/min)  ~ 32 min
     #   MetaDefender   120 x ~1.5 s        ~  3 min (only if configured)
+    #   HybridAnalysis 120 x ~1 s          ~  2 min (only if configured)
     #   MalwareBazaar  120 x ~1.5 s        ~  3 min
     #   setup / git                        ~  1 min
-    # = ~41 min. VirusTotal only sees hashes CIRCL does not know
+    # = ~43 min. VirusTotal only sees hashes CIRCL does not know
     # and cached answers are free, so real runs are shorter.
     timeout-minutes: 50
 
@@ -63,11 +64,17 @@ jobs:
       # Optional: MetaDefender Cloud is used only if this secret exists.
       METADEFENDER_API_KEY: ${{ secrets.METADEFENDER_API_KEY }}
 
+      # Optional: Hybrid Analysis (Falcon Sandbox API v2, hash search
+      # only - nothing is submitted) is used only if this secret exists.
+      HYBRID_ANALYSIS_API_KEY: ${{ secrets.HYBRID_ANALYSIS_API_KEY }}
+
       # Free VirusTotal API: 4 lookups/minute, 500/day.
       AEGIS_VT_MIN_INTERVAL_SECONDS: '16'
       AEGIS_MB_MIN_INTERVAL_SECONDS: '1'
       AEGIS_CIRCL_MIN_INTERVAL_SECONDS: '0.5'
       AEGIS_MD_MIN_INTERVAL_SECONDS: '1'
+      # Restricted key, 200 requests/minute: stay at <= 120/minute.
+      AEGIS_HA_MIN_INTERVAL_SECONDS: '0.5'
 
       # Live lookups per provider per run: ~100 hashes fit in one run.
       AEGIS_MAX_REPUTATION_LOOKUPS: '120'
@@ -199,6 +206,16 @@ jobs:
           restore-keys: |
             aegis-reputation-metadefender-
 
+      - name: Restore Hybrid Analysis reputation cache
+        id: ha-cache
+        if: ${{ env.HYBRID_ANALYSIS_API_KEY != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-hybridanalysis.json
+          key: aegis-reputation-hybridanalysis-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-hybridanalysis-
+
       - name: Fetch pull request commit
         env:
           PR_SHA: ${{ steps.pr.outputs.head_sha }}
@@ -285,6 +302,17 @@ jobs:
             --reputation metadefender \
             --cache .aegis-cache/reputation-metadefender.json
 
+      # Optional: without HYBRID_ANALYSIS_API_KEY this is a silent
+      # no-op ("skipped (key not configured)"). With a key it is fail
+      # closed like the others: verdict malicious = hard reject,
+      # suspicious = human review; no answer = not verified yet.
+      - name: Hybrid Analysis reputation check
+        run: |
+          python .github/scripts/validate_community_feed.py \
+            --report "$RUNNER_TEMP/aegis-validation.json" \
+            --reputation hybridanalysis \
+            --cache .aegis-cache/reputation-hybridanalysis.json
+
       - name: MalwareBazaar reputation check
         run: |
           python .github/scripts/validate_community_feed.py \
@@ -344,6 +372,17 @@ jobs:
         with:
           path: .aegis-cache/reputation-metadefender.json
           key: aegis-reputation-metadefender-${{ hashFiles('.aegis-cache/reputation-metadefender.json') }}
+
+      - name: Save Hybrid Analysis reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-hybridanalysis.json') != '' &&
+          steps.ha-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-hybridanalysis-{0}', hashFiles('.aegis-cache/reputation-hybridanalysis.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-hybridanalysis.json
+          key: aegis-reputation-hybridanalysis-${{ hashFiles('.aegis-cache/reputation-hybridanalysis.json') }}
 
       - name: Final AEGIS security decision
         run: |
