@@ -1,2 +1,4 @@
 3uairplayer.exe
+aegis-ransomware-guard
 aicwifiservice.exe
+fake_photo.jpg
