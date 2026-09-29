@@ -1084,6 +1084,25 @@
     },
     {
       "name": "mbupdatrv5.exe",
+      "sha256": "18675134b5e96bb168846471bea30c4642f04243a1dfc0f201b0feb410b04d51",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-29T13:17:29Z",
+      "last_checked": "2026-09-29T13:17:29Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "mbupdatrv5.exe",
       "sha256": "dc13308083018f679abb2601742c823b6ebdc02888bcf70d311aa8ce8cabca64",
       "sources": [
         "virustotal",
