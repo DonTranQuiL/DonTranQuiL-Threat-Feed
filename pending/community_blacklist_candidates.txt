@@ -1,3 +1,4 @@
 3uairplayer.exe
 aicwifiservice.exe
 fake_photo.jpg
+opera.exe
