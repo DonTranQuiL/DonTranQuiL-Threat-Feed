@@ -1694,6 +1694,25 @@
       "last_checked": "2026-09-27T09:25:08Z"
     },
     {
+      "name": "sihclient.exe",
+      "sha256": "623e71903b8e3e88182486517c7791cc6ebf34020ddddab4ddce326a01fc4bfe",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-29T02:32:31Z",
+      "last_checked": "2026-09-29T02:32:31Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "sihost.exe",
       "sha256": "88ba1d483ab3dd92f552847cce06f2457ba1792e32a4d8829ad582cffac63011",
       "sources": [
