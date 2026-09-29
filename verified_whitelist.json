@@ -413,6 +413,25 @@
       "last_checked": "2026-09-27T01:24:09Z"
     },
     {
+      "name": "devices.exe",
+      "sha256": "29d259b8cd85f6fc76ab3be13fc5d8beb0f4967e3d63738deaa70771636d1f54",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-09-29T01:11:50Z",
+      "last_checked": "2026-09-29T01:11:50Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "discord.exe",
       "sha256": "9ba77c6169112c90b06190e24d553492b44bcc8445e7707e03f6458a1b799b64",
       "sources": [
@@ -1332,6 +1351,25 @@
       },
       "first_verified": "2026-09-26T18:05:41Z",
       "last_checked": "2026-09-26T18:05:41Z"
+    },
+    {
+      "name": "pickerhost.exe",
+      "sha256": "1abb93439102919d644da1a7b51d279c297a99d55e77b222251f01388299c1c9",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-29T11:13:50Z",
+      "last_checked": "2026-09-29T11:13:50Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "powermgr.exe",
