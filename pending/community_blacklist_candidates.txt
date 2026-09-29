@@ -1,0 +1,2 @@
+3uairplayer.exe
+aicwifiservice.exe
