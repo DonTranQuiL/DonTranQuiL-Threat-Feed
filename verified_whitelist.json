@@ -2,6 +2,25 @@
   "schema": 1,
   "entries": [
     {
+      "name": "154.0.8037.58_chrome_installer_uncompressed.exe",
+      "sha256": "addd2ef92bcf7b036860f7a6d85fb8187aa62d4a323fc8bdb5ea8ecb6eb5caa2",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 65
+      },
+      "first_verified": "2026-09-29T01:59:23Z",
+      "last_checked": "2026-09-29T01:59:23Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
+    },
+    {
       "name": "3uairplayer.exe",
       "sha256": "502d2e0b97607b42f4236cf9235e0a206d5f6c7b22228c651dfa41deb128d4de",
       "sources": [
@@ -1594,6 +1613,25 @@
       },
       "first_verified": "2026-09-26T18:06:09Z",
       "last_checked": "2026-09-26T18:06:09Z"
+    },
+    {
+      "name": "setup.exe",
+      "sha256": "c7ec6077c68525c3b595abe312e9c405e55fc28dd05002c9c460ab3e6f4e410f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-09-29T01:59:24Z",
+      "last_checked": "2026-09-29T01:59:24Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "shellexperiencehost.exe",
