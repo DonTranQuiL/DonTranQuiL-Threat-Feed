@@ -1,0 +1,91 @@
+name: AEGIS Hybrid Analysis review scan
+
+# Manual, read-only: looks up the lines waiting for a human
+# (pending/needs_review.txt and the pending candidate files) in
+# Hybrid Analysis and writes a table to the job summary plus an
+# artifact. Hash lookups only (search + overview, "restricted"
+# API level); nothing is submitted to the sandbox. No push, no
+# PR, no file change: the maintainer decides what to do.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aegis-hybrid-analysis-review-scan
+  cancel-in-progress: false
+
+jobs:
+  review-scan:
+    name: Hybrid Analysis review scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      HYBRID_ANALYSIS_API_KEY: ${{ secrets.HYBRID_ANALYSIS_API_KEY }}
+      # Restricted key, 200 requests/minute: stay at <= 120/minute
+      # (search and overview share this throttle).
+      AEGIS_HA_MIN_INTERVAL_SECONDS: '0.5'
+      AEGIS_MAX_REPUTATION_LOOKUPS: '120'
+
+    steps:
+
+      - name: Checkout trusted repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # Same cache as the security gate: answers it already paid
+      # for are reused, new answers are saved for its next run.
+      - name: Restore Hybrid Analysis reputation cache
+        id: ha-cache
+        if: ${{ env.HYBRID_ANALYSIS_API_KEY != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .aegis-cache/reputation-hybridanalysis.json
+          key: aegis-reputation-hybridanalysis-${{ github.run_id }}
+          restore-keys: |
+            aegis-reputation-hybridanalysis-
+
+      - name: Hybrid Analysis review scan
+        run: |
+          python .github/scripts/validate_community_feed.py \
+            --review-scan \
+            --report "$RUNNER_TEMP/aegis-ha-review-scan.json" \
+            --summary "$RUNNER_TEMP/aegis-ha-review-scan.md" \
+            --cache .aegis-cache/reputation-hybridanalysis.json
+          cat "$RUNNER_TEMP/aegis-ha-review-scan.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the working tree is unchanged
+        run: |
+          # Read-only by design: no tracked file may change.
+          git diff --exit-code --stat
+
+      - name: Save Hybrid Analysis reputation cache
+        if: >-
+          always() &&
+          hashFiles('.aegis-cache/reputation-hybridanalysis.json') != '' &&
+          steps.ha-cache.outputs.cache-matched-key !=
+          format('aegis-reputation-hybridanalysis-{0}', hashFiles('.aegis-cache/reputation-hybridanalysis.json'))
+        uses: actions/cache/save@v6
+        with:
+          path: .aegis-cache/reputation-hybridanalysis.json
+          key: aegis-reputation-hybridanalysis-${{ hashFiles('.aegis-cache/reputation-hybridanalysis.json') }}
+
+      - name: Upload review scan result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: aegis-hybrid-analysis-review-scan
+          path: |
+            ${{ runner.temp }}/aegis-ha-review-scan.json
+            ${{ runner.temp }}/aegis-ha-review-scan.md
+          if-no-files-found: ignore
+          retention-days: 30

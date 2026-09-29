@@ -7556,6 +7556,765 @@ def phase_promote(
 
 
 # ============================================================
+# HYBRID ANALYSIS REVIEW SCAN (manual, read-only)
+# ============================================================
+# Run by "AEGIS Hybrid Analysis review scan" (workflow_dispatch).
+# Looks up ONLY the lines waiting for a human: the review queue
+# (pending/needs_review.txt) and the pending candidate files.
+# Hash lookups only: /search/hash through the gate's own
+# run_reputation (same throttle, cap and cache) plus
+# /overview/{sha256} for threat score / AV results. Both are
+# x-auth-level "restricted"; nothing is ever submitted. No feed
+# file is changed: the output is a Markdown table + JSON for
+# the maintainer, who decides.
+# ============================================================
+
+HA_OVERVIEW_URL = "https://hybrid-analysis.com/api/v2/overview/"
+
+# Overview lookups per run (one per SHA-256, after the search).
+REVIEW_SCAN_MAX_OVERVIEWS = 50
+
+REVIEW_SCAN_NO_HASH = "no hash, can't check"
+
+
+def ha_overview_lookup(
+    sha256: str,
+    api_key: str,
+):
+
+    return http_json(
+        urllib.request.Request(
+            HA_OVERVIEW_URL
+            + urllib.parse.quote(
+                sha256,
+                safe="",
+            ),
+            headers={
+                "api-key": api_key,
+                "accept": "application/json",
+                "User-Agent": HA_USER_AGENT,
+            },
+        )
+    )
+
+
+def ha_overview_summary(
+    status,
+    body,
+):
+    """Threat score / AV results from an /overview answer."""
+
+    if (
+        status != 200
+        or not isinstance(body, dict)
+        or body.get("error")
+    ):
+
+        if status in {401, 403, 429}:
+            # Same quota / bad-key rules as the search lookup.
+            state = ha_record(
+                "",
+                status,
+                body if isinstance(body, dict) else {},
+            )["status"]
+        elif status == 404:
+            state = "not_found"
+        else:
+            state = "unavailable"
+
+        return {
+            "status": state,
+            "http": status,
+        }
+
+    def as_int(value):
+
+        if isinstance(value, bool):
+            return None
+
+        if isinstance(value, int):
+            return value
+
+        if isinstance(value, float):
+            return int(value)
+
+        if (
+            isinstance(value, str)
+            and value.strip().isdigit()
+        ):
+            return int(value.strip())
+
+        return None
+
+    scanners = []
+
+    raw = body.get("scanners_v2")
+
+    if isinstance(raw, dict):
+        raw = [
+            dict(value, name=value.get("name") or key)
+            for key, value in raw.items()
+            if isinstance(value, dict)
+        ]
+
+    if not isinstance(raw, list) or not raw:
+        raw = body.get("scanners")
+
+    for scanner in (
+        raw
+        if isinstance(raw, list)
+        else []
+    ):
+
+        if not isinstance(scanner, dict):
+            continue
+
+        name = str(
+            scanner.get("name") or ""
+        ).strip()[:40]
+
+        if not name:
+            continue
+
+        scanners.append(
+            {
+                "name": name,
+                "status": str(
+                    scanner.get("status") or ""
+                ).strip()[:30],
+                "positives": as_int(
+                    scanner.get("positives")
+                ),
+                "total": as_int(
+                    scanner.get("total")
+                ),
+                "percent": as_int(
+                    scanner.get("percent")
+                ),
+            }
+        )
+
+    vx_family = body.get("vx_family")
+
+    return {
+        "status": "ok",
+        "verdict": ha_verdict_of(
+            body.get("verdict")
+        ),
+        "threat_score": as_int(
+            body.get("threat_score")
+        ),
+        "multiscan_result": as_int(
+            body.get("multiscan_result")
+        ),
+        "whitelisted":
+            body.get("whitelisted") is True,
+        "vx_family":
+            str(vx_family)[:60]
+            if vx_family
+            else "",
+        "last_file_name": str(
+            body.get("last_file_name") or ""
+        )[:80],
+        "scanners": scanners[:12],
+    }
+
+
+def review_scan_items():
+    """Every line of the review queue and pending candidates."""
+
+    items = []
+
+    counts = {}
+
+    queue_path = NEEDS_REVIEW_PATH
+
+    text = (
+        queue_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        if queue_path.exists()
+        else ""
+    )
+
+    queue, errors = parse_needs_review(
+        text
+    )
+
+    counts[NEEDS_REVIEW_REL] = len(queue)
+
+    for entry in sorted(
+        queue.values(),
+        key=lambda e: e["line"],
+    ):
+
+        items.append(
+            {
+                "file": NEEDS_REVIEW_REL,
+                "line": entry["line"],
+                "value": entry["value"],
+                "disposition":
+                    entry["disposition"],
+                "reason": entry["reason"],
+                # The queue holds lines that wanted production
+                # trust (whitelist); only the verdict is used.
+                "feed_type": "whitelist",
+            }
+        )
+
+    for key, feed_type in (
+        ("pending_whitelist", "whitelist"),
+        ("pending_blacklist", "blacklist"),
+    ):
+
+        path = FEEDS[key]
+
+        try:
+            rel = path.relative_to(ROOT).as_posix()
+        except ValueError:
+            rel = path.name
+
+        lines = feed_lines(path)
+
+        counts[rel] = len(lines)
+
+        for number, value in lines:
+
+            items.append(
+                {
+                    "file": rel,
+                    "line": number,
+                    "value": value,
+                    "disposition": "",
+                    "reason": "",
+                    "feed_type": feed_type,
+                }
+            )
+
+    for item in items:
+
+        kind, normalized = classify(
+            item["value"]
+        )
+
+        item["kind"] = kind
+
+        item["normalized"] = normalized
+
+        pinned = split_name_sha256(
+            normalized
+        ) if kind == "name_sha256" else None
+
+        item["name"] = (
+            pinned[0]
+            if pinned
+            else (
+                normalized
+                if kind == "name"
+                else ""
+            )
+        )
+
+        item["hash"] = value_indicator(
+            normalized
+        )
+
+    return items, counts, errors
+
+
+def review_verdict(
+    record,
+    overview,
+):
+    """(display verdict, rank or None) from search + overview."""
+
+    verdicts = []
+
+    if record and record.get("status") == "found":
+        verdicts.append(
+            record.get("verdict") or "no verdict"
+        )
+
+    if overview and overview.get("status") == "ok":
+
+        if overview.get("verdict"):
+            verdicts.append(overview["verdict"])
+
+        elif overview.get("whitelisted"):
+            verdicts.append("whitelisted")
+
+    if verdicts:
+
+        worst = max(
+            verdicts,
+            key=lambda v: HA_VERDICT_RANK.get(v, 0),
+        )
+
+        return worst, HA_VERDICT_RANK.get(worst)
+
+    if record and record.get("status") == "not_found":
+        return "not found", None
+
+    if (
+        overview
+        and overview.get("status") == "not_found"
+        and not record
+    ):
+        return "not found", None
+
+    if not record:
+        return "not checked", None
+
+    reason = (
+        record.get("reason")
+        or record.get("detail")
+        or record.get("status")
+        or "no answer"
+    )
+
+    return f"not checked ({reason})", None
+
+
+def review_av_text(overview) -> str:
+
+    if not overview or overview.get("status") != "ok":
+        return "-"
+
+    parts = []
+
+    if overview.get("threat_score") is not None:
+        parts.append(
+            f"threat score {overview['threat_score']}/100"
+        )
+
+    if overview.get("multiscan_result") is not None:
+        parts.append(
+            f"AV multiscan {overview['multiscan_result']}%"
+        )
+
+    for scanner in overview.get("scanners", []):
+
+        if (
+            scanner.get("positives") is not None
+            and scanner.get("total")
+        ):
+            parts.append(
+                f"{scanner['name']} "
+                f"{scanner['positives']}/{scanner['total']}"
+            )
+
+        elif scanner.get("status"):
+            parts.append(
+                f"{scanner['name']} {scanner['status']}"
+            )
+
+    if overview.get("vx_family"):
+        parts.append(
+            f"family {overview['vx_family']}"
+        )
+
+    if overview.get("whitelisted"):
+        parts.append("HA whitelisted")
+
+    return "; ".join(parts) or "none returned"
+
+
+def review_short_reason(reason: str) -> str:
+
+    if not reason:
+        return "-"
+
+    match = re.search(
+        r"\bVT \d+/\d+\b",
+        reason,
+    )
+
+    head = reason.split(";", 1)[0].strip()
+
+    if match and match.group(0) not in head:
+        head = f"{match.group(0)}; {head}"
+
+    return head[:110]
+
+
+def review_recommendation(
+    item,
+    verdict: str,
+    overview,
+) -> str:
+
+    if not item.get("hash"):
+        return (
+            "Hybrid Analysis looks up hashes only; judge "
+            "by publisher / path or add name|sha256"
+        )
+
+    score = (
+        overview.get("threat_score")
+        if overview and overview.get("status") == "ok"
+        else None
+    )
+
+    retry = (
+        " (the gate also still has to finish its own "
+        "checks for this line)"
+        if any(
+            marker in item.get("reason", "")
+            for marker in RETRY_MARKERS
+        )
+        or item.get("reason", "").startswith(
+            "not verified yet"
+        )
+        else ""
+    )
+
+    if item.get("disposition") == "hard_reject":
+        return "keep blocked (hard reject by policy)"
+
+    if item.get("feed_type") == "blacklist":
+
+        if verdict in {"malicious", "suspicious"}:
+            return "Hybrid Analysis corroborates the block"
+
+        return (
+            "no Hybrid Analysis corroboration; needs "
+            "other evidence before blocking"
+        )
+
+    if verdict == "malicious":
+        return "keep blocked (Hybrid Analysis: malicious)"
+
+    if verdict == "suspicious":
+        return (
+            "keep blocked (Hybrid Analysis: suspicious; "
+            "needs manual analysis)"
+        )
+
+    if score is not None and score >= 50:
+        return (
+            f"keep blocked (threat score {score}/100 "
+            "despite the verdict)"
+        )
+
+    if verdict in {"whitelisted", "no specific threat"}:
+        return (
+            f"Hybrid Analysis: {verdict} - looks like a "
+            "false positive, safe to override if you trust "
+            "the publisher" + retry
+        )
+
+    if verdict in {"not found", "no verdict"}:
+        return (
+            "no Hybrid Analysis evidence either way; keep "
+            "in review" + retry
+        )
+
+    return "Hybrid Analysis not checked; re-run the scan"
+
+
+def phase_review_scan(
+    args,
+):
+
+    items, counts, queue_errors = review_scan_items()
+
+    data = result()
+
+    for item in items:
+
+        if not item["hash"]:
+            continue
+
+        data["entries"].append(
+            {
+                "path": item["file"],
+                "feed_type": item["feed_type"],
+                "value": item["value"],
+                "kind": item["kind"],
+                "normalized": item["normalized"],
+            }
+        )
+
+    run_reputation(
+        "hybridanalysis",
+        data,
+        args.cache,
+    )
+
+    stats = data.get(
+        "reputation_runs",
+        {},
+    ).get(
+        "hybridanalysis",
+        {},
+    )
+
+    configured = stats.get("configured") is not False
+
+    records = {}
+
+    for record in data["reputation"]:
+
+        if record.get("provider") == "hybridanalysis":
+            records[record.get("indicator")] = record
+
+    # --------------------------------------------------------
+    # Overview (threat score / AV) for each SHA-256 found.
+    # --------------------------------------------------------
+
+    overviews = {}
+
+    overview_lookups = 0
+
+    api_key = os.environ.get(
+        PROVIDER_KEY_ENV["hybridanalysis"],
+        "",
+    ).strip()
+
+    if configured and api_key and not stats.get("stopped"):
+
+        for item in items:
+
+            sha = item["hash"]
+
+            if (
+                not sha
+                or sha in overviews
+                or not SHA256_RE.fullmatch(sha)
+            ):
+                continue
+
+            record = records.get(sha) or {}
+
+            if record.get("status") == "rate_limited":
+                break
+
+            if overview_lookups >= REVIEW_SCAN_MAX_OVERVIEWS:
+                break
+
+            throttle("hybridanalysis")
+
+            try:
+                status, body = ha_overview_lookup(
+                    sha,
+                    api_key,
+                )
+            except Exception as exc:
+                status, body = None, {
+                    "error": str(exc)[:120]
+                }
+
+            LAST_CALL["hybridanalysis"] = time.monotonic()
+
+            overview_lookups += 1
+
+            overviews[sha] = ha_overview_summary(
+                status,
+                body,
+            )
+
+            if overviews[sha]["status"] == "rate_limited":
+                break
+
+    # --------------------------------------------------------
+    # Rows
+    # --------------------------------------------------------
+
+    rows = []
+
+    for item in items:
+
+        sha = item["hash"]
+
+        record = records.get(sha) if sha else None
+
+        overview = overviews.get(sha) if sha else None
+
+        if not sha:
+            verdict = REVIEW_SCAN_NO_HASH
+        elif not configured:
+            verdict = "not checked (key not configured)"
+        else:
+            verdict, _rank = review_verdict(
+                record,
+                overview,
+            )
+
+        rows.append(
+            {
+                "file": item["file"],
+                "line": item["line"],
+                "name": item["name"] or "(bare hash)",
+                "hash": sha or "",
+                "short_hash":
+                    f"{sha[:12]}..." if sha else "-",
+                "verdict": verdict,
+                "reports":
+                    (record or {}).get("reports"),
+                "threat_score_av": (
+                    review_av_text(overview)
+                    if sha
+                    else "-"
+                ),
+                "overview": overview,
+                "disposition": item["disposition"],
+                "reason": item["reason"],
+                "short_reason": review_short_reason(
+                    item["reason"]
+                ),
+                "recommendation": (
+                    review_recommendation(
+                        item,
+                        verdict,
+                        overview,
+                    )
+                    if configured or not sha
+                    else "configure HYBRID_ANALYSIS_API_KEY "
+                    "and re-run"
+                ),
+            }
+        )
+
+    scanned_at = datetime.datetime.now(
+        datetime.timezone.utc
+    ).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+    output = {
+        "schema": 1,
+        "scanned_at": scanned_at,
+        "provider": "hybridanalysis",
+        "configured": configured,
+        "lookups": stats.get("lookups", 0),
+        "cache_hits": stats.get("cache_hits", 0),
+        "overview_lookups": overview_lookups,
+        "stopped": stats.get("stopped"),
+        "files": counts,
+        "queue_errors": queue_errors,
+        "rows": rows,
+    }
+
+    # --------------------------------------------------------
+    # Markdown (untrusted API text goes through md_cell)
+    # --------------------------------------------------------
+
+    lines = [
+        "## AEGIS Hybrid Analysis review scan",
+        "",
+        f"Scanned at {scanned_at} (UTC). Scope: the review "
+        "queue and the pending candidate files only. Hash "
+        "lookups only (search + overview); nothing was "
+        "submitted and no list was changed.",
+        "",
+    ]
+
+    if configured:
+        lines.append(
+            f"Hybrid Analysis: {output['lookups']} search "
+            f"lookups, {output['cache_hits']} cache hits, "
+            f"{overview_lookups} overview lookups."
+        )
+    else:
+        lines.append(
+            "Hybrid Analysis: HYBRID_ANALYSIS_API_KEY is not "
+            "configured; nothing was looked up."
+        )
+
+    if output["stopped"]:
+        lines.append(
+            f"Stopped early: {md_cell(output['stopped'])}"
+        )
+
+    for error in queue_errors:
+        lines.append(f"Queue parse error: {md_cell(error)}")
+
+    for rel, count in counts.items():
+
+        lines += [
+            "",
+            f"### {rel} ({count} "
+            f"line{'s' if count != 1 else ''})",
+            "",
+        ]
+
+        file_rows = [
+            row for row in rows
+            if row["file"] == rel
+        ]
+
+        if not file_rows:
+            lines.append("_no entries_")
+            continue
+
+        lines += [
+            "| Name | Hash | Hybrid verdict | Threat score "
+            "/ AV | Current reason | Recommendation |",
+            "|---|---|---|---|---|---|",
+        ]
+
+        for row in file_rows:
+
+            verdict = row["verdict"]
+
+            if row.get("reports"):
+                verdict += (
+                    f" ({row['reports']} report"
+                    f"{'s' if row['reports'] != 1 else ''})"
+                )
+
+            lines.append(
+                "| "
+                + " | ".join(
+                    md_cell(cell)
+                    for cell in (
+                        row["name"],
+                        row["short_hash"],
+                        verdict,
+                        row["threat_score_av"],
+                        row["short_reason"],
+                        row["recommendation"],
+                    )
+                )
+                + " |"
+            )
+
+    lines += [
+        "",
+        "No list was changed. The maintainer decides.",
+        "",
+    ]
+
+    markdown = "\n".join(lines)
+
+    Path(args.report).parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    Path(args.report).write_text(
+        json.dumps(output, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    if args.summary:
+
+        Path(args.summary).write_text(
+            markdown,
+            encoding="utf-8",
+        )
+
+    print(markdown)
+
+    if not configured:
+        print(
+            "::warning::HYBRID_ANALYSIS_API_KEY is not "
+            "configured; review scan did nothing"
+        )
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -7641,6 +8400,22 @@ def main():
     )
 
     parser.add_argument(
+        "--review-scan",
+        action="store_true",
+        help=(
+            "Read-only Hybrid Analysis lookup of the review "
+            "queue and pending candidates (JSON to --report, "
+            "Markdown to --summary); changes no file"
+        ),
+    )
+
+    parser.add_argument(
+        "--summary",
+        default="",
+        help="Markdown output file (--review-scan)",
+    )
+
+    parser.add_argument(
         "--carry-ref",
         default="",
         help=(
@@ -7667,6 +8442,18 @@ def main():
     report = Path(
         args.report
     )
+
+    # --------------------------------------------------------
+    # Hybrid Analysis review scan (read-only)
+    # --------------------------------------------------------
+
+    if args.review_scan:
+
+        phase_review_scan(
+            args
+        )
+
+        return
 
     # --------------------------------------------------------
     # Verified promotion

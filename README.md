@@ -86,6 +86,12 @@ your profile page (top-right user menu), go to the **API key** tab and press **C
 then add it as the repository secret `HYBRID_ANALYSIS_API_KEY`
 (Settings > Secrets and variables > Actions).
 
+**Review scan (manual, read-only):** Actions > *AEGIS Hybrid Analysis review scan* > Run workflow
+looks up only the lines waiting for you (`pending/needs_review.txt` and the pending candidate files)
+and writes a table (verdict, threat score / AV results from `GET /api/v2/overview/{sha256}`, the
+current review reason and a recommendation) to the job summary and an artifact. Name-only lines
+cannot be looked up (no hash). It never submits anything, pushes nothing and changes no list.
+
 ## Community
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/qaHPTTKHae)
