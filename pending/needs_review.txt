@@ -10,4 +10,5 @@
 #
 # Maintained by the AEGIS promotion job. Do not add production trust from here.
 
+devices.exe|29d259b8cd85f6fc76ab3be13fc5d8beb0f4967e3d63738deaa70771636d1f54|review|not verified yet: VirusTotal reputation check incomplete for whitelist hash (hash): lookup failed (The read operation timed out); NOT approved - re-run the gate (cached results are reused) or review m
 ss_conn_service2.exe|ad20bdfb11acd97dd10a17a637c477160184dfe828f00724fc1f396fd3109e80|review|VT 1/71 malicious; VirusTotal: whitelist hash has 1 malicious detections: (hash); whitelist hash (hash) is unknown to every reputation provider that can vouch for it (CIRCL hashlookup, VirusTotal with
