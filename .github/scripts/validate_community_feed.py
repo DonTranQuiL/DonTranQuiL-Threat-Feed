@@ -25,6 +25,9 @@ Security model:
      |
      +--> MetaDefender Cloud    (optional: only if a key is set)
      |
+     +--> Hybrid Analysis       (optional: only if a key is set;
+     |                           Falcon Sandbox verdict)
+     |
      +--> MalwareBazaar lookup  (every hash: a hit is malware)
      |
      +--> deterministic PASS / FAIL
@@ -43,7 +46,11 @@ global_whitelist.txt accepts ONLY "name.exe|<sha256>" lines.
 A whitelist hash (bare or pinned) is approved only if it is
 known-good - found in CIRCL hashlookup, or found by VirusTotal
 with 0 malicious detections - AND MalwareBazaar (plus
-MetaDefender, when configured) checked it without a hit.
+MetaDefender and Hybrid Analysis, when configured) checked it
+without a hit. Hybrid Analysis: "malicious" is a hard reject,
+"suspicious" goes to human review; "no specific threat",
+"whitelisted", "no verdict" and "not found" never block (and
+never vouch) on their own.
 
 Important:
 
@@ -316,6 +323,21 @@ MD_MIN_INTERVAL = float(
     )
 )
 
+# Hybrid Analysis (Falcon Sandbox): this repository's key is a
+# "Restricted" key (hash search only) with 200 API requests /
+# minute. At most one lookup per 0.5 s (<= 120 / minute) keeps
+# well below that; cached answers cost nothing. API v2 also
+# allows one key from at most 2 IPs per hour (a GitHub runner
+# gets a new IP each run): the limit answer is treated as a
+# quota (not verified yet, retried), never as a bad key.
+# Only hash lookups are made - nothing is ever submitted.
+HA_MIN_INTERVAL = float(
+    os.environ.get(
+        "AEGIS_HA_MIN_INTERVAL_SECONDS",
+        "0.5",
+    )
+)
+
 # Live lookups per provider per run (cache hits are free).
 # 120 fits a ~100-hash PR in one run.
 MAX_LOOKUPS = int(
@@ -324,6 +346,30 @@ MAX_LOOKUPS = int(
         "120",
     )
 )
+
+# Optional extra cap for Hybrid Analysis live lookups per run
+# (the rest is "not verified yet" and retried; cached answers
+# are free). Default: the same as every provider.
+HA_MAX_LOOKUPS = int(
+    os.environ.get(
+        "AEGIS_HA_MAX_LOOKUPS",
+        str(MAX_LOOKUPS),
+    )
+)
+
+
+def provider_cap(
+    provider: str,
+) -> int:
+    """Live lookups allowed for this provider in one run."""
+
+    if provider == "hybridanalysis":
+        return min(
+            MAX_LOOKUPS,
+            HA_MAX_LOOKUPS,
+        )
+
+    return MAX_LOOKUPS
 
 # A provider that keeps failing (outage, network) is stopped
 # after this many failures in a row, so a dead service cannot
@@ -374,11 +420,12 @@ CACHE_TTL = {
 }
 
 # Workflow order: circl -> virustotal -> metadefender ->
-# malwarebazaar -> finalize.
+# hybridanalysis -> malwarebazaar -> finalize.
 REPUTATION_PROVIDERS = (
     "circl",
     "virustotal",
     "metadefender",
+    "hybridanalysis",
     "malwarebazaar",
 )
 
@@ -386,6 +433,7 @@ PROVIDER_LABEL = {
     "circl": "CIRCL hashlookup",
     "virustotal": "VirusTotal",
     "metadefender": "MetaDefender Cloud",
+    "hybridanalysis": "Hybrid Analysis",
     "malwarebazaar": "MalwareBazaar",
 }
 
@@ -394,13 +442,16 @@ PROVIDER_KEY_ENV = {
     "circl": None,
     "virustotal": "VIRUSTOTAL_API_KEY",
     "metadefender": "METADEFENDER_API_KEY",
+    "hybridanalysis": "HYBRID_ANALYSIS_API_KEY",
     "malwarebazaar": "MALWAREBAZAAR_AUTH_KEY",
 }
 
 # Used only when its key is configured; skipped silently
-# otherwise. Once configured it is fail closed like the rest.
+# otherwise. Once configured it is fail closed like the rest
+# (no answer = not verified yet, retried).
 OPTIONAL_PROVIDERS = {
     "metadefender",
+    "hybridanalysis",
 }
 
 HASH_KINDS = {
@@ -419,6 +470,45 @@ MD_BAD_RESULTS = {
 
 MD_SUSPICIOUS_RESULTS = {
     2,
+}
+
+# Hybrid Analysis (Falcon Sandbox) verdicts, worst first. The
+# API returns them as text ("no specific threat") in search
+# results; the numeric search filter uses 1..5 (1 whitelisted,
+# 2 no verdict, 3 no specific threat, 4 suspicious, 5 malicious).
+HA_VERDICT_RANK = {
+    "malicious": 5,
+    "suspicious": 4,
+    "no specific threat": 3,
+    "no verdict": 2,
+    "whitelisted": 1,
+}
+
+HA_VERDICT_CODES = {
+    rank: verdict
+    for verdict, rank in HA_VERDICT_RANK.items()
+}
+
+# malicious: hard reject. suspicious: human review. Everything
+# else never blocks (and never vouches) on its own.
+HA_BLOCK_VERDICTS = {
+    "malicious",
+}
+
+HA_REVIEW_VERDICTS = {
+    "suspicious",
+}
+
+# Proof entry field (optional; present when Hybrid Analysis
+# answered for the hash): {"verdict": "<verdict | not found>"}
+HA_PROOF_FIELD = "hybrid_analysis"
+
+HA_PROOF_VERDICTS = (
+    set(HA_VERDICT_RANK)
+    - HA_BLOCK_VERDICTS
+    - HA_REVIEW_VERDICTS
+) | {
+    "not found",
 }
 
 
@@ -1403,7 +1493,7 @@ def proof_entry_problem(
     ):
         return "entry must be an object"
 
-    if set(entry) not in (
+    if set(entry) - {HA_PROOF_FIELD} not in (
         set(PROOF_FIELDS),
         set(PROOF_FIELDS) | {OVERRIDE_FIELD},
     ):
@@ -1411,7 +1501,35 @@ def proof_entry_problem(
         return (
             "fields must be exactly "
             + ", ".join(PROOF_FIELDS)
-            + f" (plus {OVERRIDE_FIELD} when overridden)"
+            + f" (plus {OVERRIDE_FIELD} when overridden, "
+            f"{HA_PROOF_FIELD} when Hybrid Analysis answered)"
+        )
+
+    if HA_PROOF_FIELD in entry:
+
+        ha = entry[HA_PROOF_FIELD]
+
+        if (
+            not isinstance(ha, dict)
+            or set(ha) != {"verdict"}
+            or ha["verdict"] not in HA_PROOF_VERDICTS
+        ):
+            return (
+                f"{HA_PROOF_FIELD} must be "
+                '{"verdict": "<'
+                + " | ".join(sorted(HA_PROOF_VERDICTS))
+                + '>"} (malicious / suspicious are '
+                "never promoted)"
+            )
+
+    if (
+        "hybridanalysis" in (entry.get("sources") or [])
+        if isinstance(entry.get("sources"), list)
+        else False
+    ) != (HA_PROOF_FIELD in entry):
+        return (
+            f"hybridanalysis in sources needs the "
+            f"{HA_PROOF_FIELD} verdict (and vice versa)"
         )
 
     name = entry["name"]
@@ -2301,6 +2419,7 @@ def review_disposition_for(
         "malwarebazaar",
         "knownmalicious",
         "metadefender cloud: whitelist hash flagged",
+        "hybrid analysis: whitelist hash verdict malicious",
     )
 
     if any(
@@ -2740,6 +2859,48 @@ def md_lookup(
 
 
 # ============================================================
+# HYBRID ANALYSIS (Falcon Sandbox public API v2) - optional
+# GET https://hybrid-analysis.com/api/v2/search/hash?hash=<hash>
+# headers "api-key: <key>" and "User-Agent: Falcon Sandbox".
+# 200 {"sha256s": [...], "reports": [{"verdict": ...}, ...]};
+# no reports = unknown. The endpoint is documented with
+# x-auth-level "restricted" (API v2.38.0), so a Restricted key
+# works; no sandbox submission endpoint is ever called.
+# ============================================================
+
+HA_SEARCH_URL = "https://hybrid-analysis.com/api/v2/search/hash"
+
+HA_USER_AGENT = "Falcon Sandbox"
+
+
+def ha_lookup(
+    indicator: str,
+    api_key: str,
+):
+
+    url = (
+        HA_SEARCH_URL
+        + "?"
+        + urllib.parse.urlencode(
+            {
+                "hash": indicator,
+            }
+        )
+    )
+
+    return http_json(
+        urllib.request.Request(
+            url,
+            headers={
+                "api-key": api_key,
+                "accept": "application/json",
+                "User-Agent": HA_USER_AGENT,
+            },
+        )
+    )
+
+
+# ============================================================
 # MALWAREBAZAAR
 # ============================================================
 
@@ -2785,6 +2946,7 @@ def throttle(
         "circl": CIRCL_MIN_INTERVAL,
         "virustotal": VT_MIN_INTERVAL,
         "metadefender": MD_MIN_INTERVAL,
+        "hybridanalysis": HA_MIN_INTERVAL,
         "malwarebazaar": MB_MIN_INTERVAL,
     }.get(
         provider,
@@ -2938,6 +3100,23 @@ def cache_entry_valid(
                     or isinstance(result_code, bool)
                 )
             )
+        ):
+            return False
+
+    if (
+        provider == "hybridanalysis"
+        and status == "found"
+    ):
+
+        reports = record.get(
+            "reports"
+        )
+
+        if (
+            record.get("verdict") not in HA_VERDICT_RANK
+            or not isinstance(reports, int)
+            or isinstance(reports, bool)
+            or reports < 0
         ):
             return False
 
@@ -3396,6 +3575,209 @@ def md_record(
     return record
 
 
+def ha_verdict_of(
+    value,
+):
+    """Normalised Hybrid Analysis verdict text, or None."""
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return HA_VERDICT_CODES.get(value)
+
+    if not isinstance(value, str):
+        return None
+
+    text = " ".join(
+        value.strip()
+        .lower()
+        .replace("_", " ")
+        .replace("-", " ")
+        .split()
+    )
+
+    aliases = {
+        "nospecificthreat": "no specific threat",
+        "noverdict": "no verdict",
+        "no threat": "no specific threat",
+    }
+
+    text = aliases.get(
+        text.replace(" ", ""),
+        text,
+    )
+
+    return (
+        text
+        if text in HA_VERDICT_RANK
+        else None
+    )
+
+
+def ha_record(
+    key_id: str,
+    status,
+    body,
+):
+
+    record = {
+        "provider":
+            "hybridanalysis",
+        "indicator":
+            key_id,
+    }
+
+    error_text = (
+        str(body.get("error", ""))
+        if isinstance(body, dict)
+        else ""
+    )
+
+    message = error_text
+
+    try:
+
+        parsed = json.loads(
+            error_text
+        ) if error_text.startswith("{") else {}
+
+        if isinstance(parsed, dict):
+            message = str(
+                parsed.get("message")
+                or error_text
+            )
+
+    except ValueError:
+        pass
+
+    lowered = message.lower()
+
+    if status == 429:
+
+        record["status"] = "rate_limited"
+        record["http"] = status
+
+    elif status in {
+        401,
+        403,
+    }:
+
+        # The per-key limits (requests / hour, 2 IPs per hour)
+        # are quota, not a bad key: retried, never "rejected".
+        if any(
+            marker in lowered
+            for marker in (
+                "limit",
+                "quota",
+                "too many",
+                " ip",
+                "ip address",
+            )
+        ):
+            record["status"] = "rate_limited"
+
+        else:
+            record["status"] = "auth_error"
+
+        record["http"] = status
+        record["detail"] = message[:180]
+
+    elif status == 404:
+
+        # Only "this hash / sample is unknown" is definitive; a
+        # wrong endpoint (HTML page, bare "Not Found") is not.
+        if (
+            not message.lstrip().startswith("<")
+            and "not found" in lowered
+            and any(
+                word in lowered
+                for word in ("hash", "sample", "report")
+            )
+        ):
+            record["status"] = "not_found"
+
+        else:
+            record["status"] = "error"
+            record["http"] = status
+            record["detail"] = message[:180]
+
+    elif status != 200:
+
+        record["status"] = "error"
+        record["http"] = status
+
+        if message:
+            record["detail"] = message[:180]
+
+    else:
+
+        if isinstance(body, list):
+            reports = body
+            sha256s = []
+
+        elif isinstance(body, dict) and not body.get("error"):
+            reports = body.get("reports")
+            sha256s = body.get("sha256s")
+
+        else:
+            reports = None
+            sha256s = None
+
+        if not isinstance(reports, list) or (
+            sha256s is not None
+            and not isinstance(sha256s, list)
+        ):
+
+            record["status"] = "error"
+            record["detail"] = (
+                message
+                or "unexpected Hybrid Analysis answer"
+            )[:180]
+
+            return record
+
+        verdicts = [
+            ha_verdict_of(
+                report.get("verdict")
+            )
+            for report in reports
+            if isinstance(report, dict)
+        ]
+
+        known = [
+            verdict
+            for verdict in verdicts
+            if verdict
+        ]
+
+        if not reports and not sha256s:
+
+            record["status"] = "not_found"
+
+        else:
+
+            # Worst verdict over every report returned (latest
+            # 20 submissions): one "malicious" report decides.
+            record.update(
+                {
+                    "status":
+                        "found",
+                    "verdict":
+                        max(
+                            known,
+                            key=HA_VERDICT_RANK.get,
+                        )
+                        if known
+                        else "no verdict",
+                    "reports":
+                        len(reports),
+                }
+            )
+
+    return record
+
+
 def make_record(
     provider: str,
     key_id: str,
@@ -3411,6 +3793,9 @@ def make_record(
 
     if provider == "metadefender":
         return md_record(key_id, status, body)
+
+    if provider == "hybridanalysis":
+        return ha_record(key_id, status, body)
 
     return mb_record(key_id, status, body)
 
@@ -3812,6 +4197,66 @@ def judge_record(
             )
 
     # =================================================
+    # HYBRID ANALYSIS (Falcon Sandbox verdict)
+    # =================================================
+
+    elif record["provider"] == "hybridanalysis":
+
+        verdict = record.get(
+            "verdict"
+        )
+
+        reports = record.get(
+            "reports",
+            0,
+        )
+
+        if (
+            feed_type == "whitelist"
+            and verdict in HA_BLOCK_VERDICTS
+        ):
+
+            data["errors"].append(
+                "Hybrid Analysis: whitelist hash verdict "
+                f"malicious ({reports} report(s)): {key_id}"
+            )
+
+        elif (
+            feed_type == "whitelist"
+            and verdict in HA_REVIEW_VERDICTS
+        ):
+
+            data["errors"].append(
+                "Hybrid Analysis: whitelist hash verdict "
+                f"suspicious ({reports} report(s)); "
+                f"manual review required: {key_id}"
+            )
+
+        elif (
+            feed_type == "blacklist"
+            and verdict in (
+                HA_BLOCK_VERDICTS
+                | HA_REVIEW_VERDICTS
+            )
+        ):
+
+            data["warnings"].append(
+                "Hybrid Analysis corroborates blacklist "
+                f"hash (verdict {verdict}): {key_id}"
+            )
+
+        elif (
+            feed_type == "blacklist"
+            and verdict == "whitelisted"
+        ):
+
+            data["warnings"].append(
+                "Hybrid Analysis lists blacklist hash as "
+                "whitelisted; possible false positive - "
+                f"review: {key_id}"
+            )
+
+    # =================================================
     # MALWAREBAZAAR
     # =================================================
 
@@ -3997,7 +4442,7 @@ def run_reputation(
             "configured": False,
             "lookups": 0,
             "cache_hits": 0,
-            "cap": MAX_LOOKUPS,
+            "cap": provider_cap(provider),
             "stopped": None,
         }
 
@@ -4053,7 +4498,7 @@ def run_reputation(
             "configured": True,
             "lookups": 0,
             "cache_hits": 0,
-            "cap": MAX_LOOKUPS,
+            "cap": provider_cap(provider),
             "stopped": None,
         }
 
@@ -4180,14 +4625,18 @@ def run_reputation(
 
                 continue
 
-            if lookups >= MAX_LOOKUPS:
+            if lookups >= provider_cap(provider):
 
                 mark_unchecked(
                     provider,
                     item,
                     "per-run lookup cap reached "
-                    "(AEGIS_MAX_REPUTATION_LOOKUPS="
-                    f"{MAX_LOOKUPS})",
+                    + (
+                        "(AEGIS_HA_MAX_LOOKUPS="
+                        if provider == "hybridanalysis"
+                        else "(AEGIS_MAX_REPUTATION_LOOKUPS="
+                    )
+                    + f"{provider_cap(provider)})",
                     data,
                 )
 
@@ -4218,6 +4667,13 @@ def run_reputation(
                 elif provider == "metadefender":
 
                     status, body = md_lookup(
+                        key_id,
+                        key,
+                    )
+
+                elif provider == "hybridanalysis":
+
+                    status, body = ha_lookup(
                         key_id,
                         key,
                     )
@@ -4382,7 +4838,7 @@ def run_reputation(
         "skipped_known_good":
             skipped_known,
         "cap":
-            MAX_LOOKUPS,
+            provider_cap(provider),
         "stopped":
             stopped or None,
     }
@@ -4416,9 +4872,11 @@ def definitive_records(
     return definitive
 
 
-def metadefender_required(
+def optional_required(
+    provider: str,
     data: dict,
 ) -> bool:
+    """An optional provider is required once its key is set."""
 
     return bool(
         (
@@ -4429,12 +4887,32 @@ def metadefender_required(
                 )
                 or {}
             ).get(
-                "metadefender",
+                provider,
             )
             or {}
         ).get(
             "configured"
         )
+    )
+
+
+def metadefender_required(
+    data: dict,
+) -> bool:
+
+    return optional_required(
+        "metadefender",
+        data,
+    )
+
+
+def hybridanalysis_required(
+    data: dict,
+) -> bool:
+
+    return optional_required(
+        "hybridanalysis",
+        data,
     )
 
 
@@ -4516,6 +4994,9 @@ def whitelist_hash_verdict(
 
     if metadefender_required(data):
         required.add("metadefender")
+
+    if hybridanalysis_required(data):
+        required.add("hybridanalysis")
 
     missing = [
         PROVIDER_LABEL[provider]
@@ -4691,6 +5172,15 @@ def verify_proofs(
 
             elif source == "malwarebazaar":
                 confirmed = record.get("status") == "not_found"
+
+            elif source == "hybridanalysis":
+                confirmed = not (
+                    record.get("status") == "found"
+                    and record.get("verdict") in (
+                        HA_BLOCK_VERDICTS
+                        | HA_REVIEW_VERDICTS
+                    )
+                )
 
             else:
                 confirmed = not (
@@ -5726,6 +6216,21 @@ def build_proof_entry(
     ):
         sources.append("metadefender")
 
+    ha = definitive.get("hybridanalysis")
+
+    ha_verdict = (
+        (
+            ha.get("verdict")
+            if ha.get("status") == "found"
+            else "not found"
+        )
+        if ha
+        else None
+    )
+
+    if ha_verdict in HA_PROOF_VERDICTS:
+        sources.append("hybridanalysis")
+
     mb = definitive.get("malwarebazaar")
 
     if mb and mb.get("status") == "not_found":
@@ -5765,6 +6270,11 @@ def build_proof_entry(
             "reason": override["reason"],
         }
 
+    if ha_verdict in HA_PROOF_VERDICTS:
+        entry[HA_PROOF_FIELD] = {
+            "verdict": ha_verdict,
+        }
+
     return entry
 
 
@@ -5780,6 +6290,7 @@ def proof_text(
                     field: entries[key][field]
                     for field in (
                         *PROOF_FIELDS,
+                        HA_PROOF_FIELD,
                         OVERRIDE_FIELD,
                     )
                     if field in entries[key]
@@ -6088,6 +6599,61 @@ def update_needs_review(
             if entry["disposition"] == "hard_reject"
         ),
     }
+
+
+def ha_summary(
+    verdict: dict,
+    data: dict,
+    carried_proof: dict | None = None,
+) -> str:
+    """Hybrid Analysis result of one line for the report tables."""
+
+    normalized = str(
+        verdict.get("normalized")
+        or verdict.get("value")
+        or ""
+    )
+
+    indicator = value_indicator(
+        normalized
+    )
+
+    if not indicator:
+        return "-"
+
+    if verdict.get("status") == "carried":
+
+        entry = (carried_proof or {}).get(
+            normalized
+        ) or {}
+
+        return (
+            entry.get(HA_PROOF_FIELD) or {}
+        ).get(
+            "verdict",
+            "earlier run",
+        )
+
+    if not hybridanalysis_required(data):
+        return "not configured"
+
+    record = definitive_records(
+        indicator,
+        data,
+    ).get(
+        "hybridanalysis"
+    )
+
+    if not record:
+        return "not checked yet"
+
+    if record.get("status") == "not_found":
+        return "not found"
+
+    return str(
+        record.get("verdict")
+        or "no verdict"
+    )
 
 
 def build_promotion(
@@ -6637,6 +7203,17 @@ def build_promotion(
         else None
     ) != review_original
 
+    for verdict in verdicts:
+
+        verdict.setdefault(
+            "ha",
+            ha_summary(
+                verdict,
+                data,
+                carried_proof,
+            ),
+        )
+
     plan = {
         "review": review_counts,
         "changed": changed,
@@ -6823,17 +7400,17 @@ def promotion_texts(
         (
             "rejected",
             "Rejected lines",
-            ("line", "file", "reason"),
+            ("line", "file", "Hybrid Analysis", "reason"),
         ),
         (
             "retry",
             "Not verified yet (quota / outage; retried next run)",
-            ("line", "file", "reason"),
+            ("line", "file", "Hybrid Analysis", "reason"),
         ),
         (
             "needs_hash",
             "NEEDS HASH (name-only, not trusted)",
-            ("line", "file", "note"),
+            ("line", "file", "Hybrid Analysis", "note"),
         ),
     ):
 
@@ -6841,6 +7418,7 @@ def promotion_texts(
             (
                 verdict["value"],
                 verdict["path"],
+                verdict.get("ha") or "-",
                 "; ".join(verdict["reasons"])
                 or (
                     "moved to "
@@ -6878,7 +7456,8 @@ def promotion_texts(
         "",
         "Contains ONLY lines that passed every check "
         "(structure, policy, CIRCL hashlookup / VirusTotal, "
-        "MalwareBazaar, MetaDefender if configured). Each "
+        "MalwareBazaar, MetaDefender and Hybrid Analysis if "
+        "configured). Each "
         "production whitelist line has a proof entry in "
         f"`{PROOF_REL}`.",
         "",
@@ -6902,6 +7481,7 @@ def promotion_texts(
                 (
                     verdict["normalized"],
                     verdict["target"],
+                    verdict.get("ha") or "-",
                     {
                         "promote": "verified in this run",
                         "carried": "verified in an earlier run",
@@ -6917,7 +7497,7 @@ def promotion_texts(
                 )
                 for verdict in promoted
             ],
-            ("line", "file", "status"),
+            ("line", "file", "Hybrid Analysis", "status"),
         ),
     ]
 
