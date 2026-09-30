@@ -1260,6 +1260,25 @@
       "last_checked": "2026-09-26T18:05:33Z"
     },
     {
+      "name": "netstat.exe",
+      "sha256": "09bca819ab371a2d4f62ca5114c1335c38fd196ae7956e2fc4d154bbe55c3f4c",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-09-30T20:47:20Z",
+      "last_checked": "2026-09-30T20:47:20Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "ngciso.exe",
       "sha256": "54df170560e030aa0bd6dff46e8cbadb6910c6f7ab953c585ae42abb8dad4ced",
       "sources": [
