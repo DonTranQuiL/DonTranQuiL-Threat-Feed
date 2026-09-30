@@ -2294,6 +2294,25 @@
       "last_checked": "2026-09-26T18:06:49Z"
     },
     {
+      "name": "uieorchestrator.exe",
+      "sha256": "bf78d09a530b5b01002f92bcc7173cb3657b7957a985577db60d041518792e69",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-09-30T04:49:57Z",
+      "last_checked": "2026-09-30T04:49:57Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "uncserver.exe",
       "sha256": "9c6ca621c052842f3ef6b5b631db9403f8b68d00c10f1ab16814b9900a52abbf",
       "sources": [
