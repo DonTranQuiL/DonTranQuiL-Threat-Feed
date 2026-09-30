@@ -2,3 +2,4 @@
 aicwifiservice.exe
 fake_photo.jpg
 opera.exe
+imfbigupgrade.exe
