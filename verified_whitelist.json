@@ -55,6 +55,25 @@
       "last_checked": "2026-09-27T09:25:02Z"
     },
     {
+      "name": "adb.exe",
+      "sha256": "56656270da132f44e9cb4fb86a12ba965635c80423d43dcdd944d9fec4ab4622",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-01T19:17:16Z",
+      "last_checked": "2026-10-01T19:17:16Z",
+      "hybrid_analysis": {
+        "verdict": "whitelisted"
+      }
+    },
+    {
       "name": "aesm_service.exe",
       "sha256": "4759983dc5dc7fe0dfc5c40a483e137b461953bacca1756b82ed04d19d62da98",
       "sources": [
@@ -252,6 +271,25 @@
       "last_checked": "2026-09-26T18:04:22Z"
     },
     {
+      "name": "chatgpt.exe",
+      "sha256": "8fb63474e98f6651105fd78c575be5ebae67fb869849b16e7a940f2da54c28ab",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-01T19:17:19Z",
+      "last_checked": "2026-10-01T19:17:19Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "cleanmgr.exe",
       "sha256": "3c064f4a0a786ff830d47dbf68b17ed7a364b611203ea4b9158e6c991509b2d7",
       "sources": [
@@ -265,6 +303,63 @@
       },
       "first_verified": "2026-09-26T21:57:27Z",
       "last_checked": "2026-09-26T21:57:27Z"
+    },
+    {
+      "name": "codex-computer-use-swift.exe",
+      "sha256": "76439e11d1ba548251ca0224158002bd8747a2baac4d20363cc7910f26523b8e",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-01T19:17:21Z",
+      "last_checked": "2026-10-01T19:17:21Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "codex-windows-sandbox-service.exe",
+      "sha256": "73704b5acc4b695bdce591d6d707b6e829b20cd076eabab898cd3b0aa9f05d6f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-01T19:17:23Z",
+      "last_checked": "2026-10-01T19:17:23Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "codex.exe",
+      "sha256": "34549ded6e2aee87c911c62d025e52e26c488683d0f489cd68f756baef1a6df6",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-01T19:17:24Z",
+      "last_checked": "2026-10-01T19:17:24Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
     },
     {
       "name": "compattelrunner.exe",
@@ -657,6 +752,25 @@
       "last_checked": "2026-09-26T18:04:50Z"
     },
     {
+      "name": "git.exe",
+      "sha256": "c39b1b4f7a57935bbeadf246dc2466316619453a6a9da77c4a9c6bd6d8fb21d3",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-01T19:17:26Z",
+      "last_checked": "2026-10-01T19:17:26Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "grok bot.exe",
       "sha256": "7408a54d801ce5d2c0bc6ac564d66aa8948979b7867cc4432ca61a9eaa30cede",
       "sources": [
@@ -762,6 +876,25 @@
       },
       "first_verified": "2026-09-26T18:04:58Z",
       "last_checked": "2026-09-26T18:04:58Z"
+    },
+    {
+      "name": "iexplore.exe",
+      "sha256": "d0643c90dc52eab58f45348b62882dffecd278d2c0e0ecf8dc038b186f22f94e",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-01T19:17:27Z",
+      "last_checked": "2026-10-01T19:17:27Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
     },
     {
       "name": "imf.exe",
@@ -2124,6 +2257,25 @@
       },
       "first_verified": "2026-09-26T18:06:34Z",
       "last_checked": "2026-09-26T18:06:34Z"
+    },
+    {
+      "name": "tar.exe",
+      "sha256": "32afbc7a959da8d9980ae4cce7c7d964ae4a4b04921529935d5c5542e8e8a49c",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-01T19:17:30Z",
+      "last_checked": "2026-10-01T19:17:30Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "taskhostw.exe",
