@@ -74,6 +74,25 @@
       "last_checked": "2026-09-27T09:25:02Z"
     },
     {
+      "name": "acpowernotification.exe",
+      "sha256": "525769a71777f6f43e60b2a15bc11f1ff5c1013e65227770a7fba24cd40f8c1c",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:28:27Z",
+      "last_checked": "2026-10-02T09:28:27Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "adb.exe",
       "sha256": "56656270da132f44e9cb4fb86a12ba965635c80423d43dcdd944d9fec4ab4622",
       "sources": [
@@ -88,6 +107,25 @@
       },
       "first_verified": "2026-10-01T19:17:16Z",
       "last_checked": "2026-10-01T19:17:16Z",
+      "hybrid_analysis": {
+        "verdict": "whitelisted"
+      }
+    },
+    {
+      "name": "adb.exe",
+      "sha256": "957e46b8615f7af5b7292a2ddabe98d2e61940c3fb2b0545756507f080613e71",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:28Z",
+      "last_checked": "2026-10-02T09:28:28Z",
       "hybrid_analysis": {
         "verdict": "whitelisted"
       }
@@ -156,6 +194,25 @@
     },
     {
       "name": "applemobiledeviceservice.exe",
+      "sha256": "59b363272fc262ee0bd3c830d065bd934a0a81a8b03b1922b9f93b60076f7947",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:30Z",
+      "last_checked": "2026-10-02T09:28:30Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "applemobiledeviceservice.exe",
       "sha256": "60f07cfbc42b92e14104ea17ff408506c3c29fa7a529d6cc7b352006b3805a94",
       "sources": [
         "virustotal",
@@ -215,6 +272,177 @@
       "last_checked": "2026-09-26T18:04:19Z"
     },
     {
+      "name": "armourycrate.exe",
+      "sha256": "7616f0c4d36d583412c3c8335aeec2540e1bbe51e7eb740c2637ae45541f8ef4",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:31Z",
+      "last_checked": "2026-10-02T09:28:31Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "armourycrate.service.exe",
+      "sha256": "3e4c38e85ad391ed71339332fb3374c42ead6b67afbd9765e416e7f17fae612b",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:33Z",
+      "last_checked": "2026-10-02T09:28:33Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "armourycrate.usersessionhelper.exe",
+      "sha256": "0994c248c207fabec308de96ecf73336559be8cb55574821e13fc7db127a5daf",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:35Z",
+      "last_checked": "2026-10-02T09:28:35Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "armourycratecontrolinterface.exe",
+      "sha256": "975835991d770bdcef47f0903876ac2f759ea81aa887540a0729a20badc2942a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:28:36Z",
+      "last_checked": "2026-10-02T09:28:36Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "armourysocketserver.exe",
+      "sha256": "a155352b9fba6d8446d2efdfa247c40e7cd74c549fa88d696b854a8440153e47",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:38Z",
+      "last_checked": "2026-10-02T09:28:38Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "armouryswagent.exe",
+      "sha256": "0d7d047941895ffb5ec4881fcef7a1b3c6b37f2081509a9d805bebf31ee282eb",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:39Z",
+      "last_checked": "2026-10-02T09:28:39Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asus_framework.exe",
+      "sha256": "bcd03da39b9d9d9bae3e20d97f73bb790f9196a6e232b953b54fd4545184eeaf",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-02T09:28:41Z",
+      "last_checked": "2026-10-02T09:28:41Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
+    },
+    {
+      "name": "asusappservice.exe",
+      "sha256": "c19e5b7637a94b236417837c9f3d93dc08672aec0b1e10cd630aeab4605bc93a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:42Z",
+      "last_checked": "2026-10-02T09:28:42Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asuscertservice.exe",
+      "sha256": "55966e590d49fb38707728c09fb4bbda6f8d056a1b79352378f7ea69dd0050c8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:44Z",
+      "last_checked": "2026-10-02T09:28:44Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "asushotkey.exe",
       "sha256": "4e81f5ff3bf13e2c12a2f1b23d5aca6ae20be4bf86e3c590196dccf3f465e497",
       "sources": [
@@ -229,6 +457,196 @@
       },
       "first_verified": "2026-10-02T09:09:06Z",
       "last_checked": "2026-10-02T09:09:06Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asusoptimization.exe",
+      "sha256": "e160b6de0adab88d834aaba6d3086495115b6cc23e8734273c5ad7dccda4340b",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:45Z",
+      "last_checked": "2026-10-02T09:28:45Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asusoptimizationstartuptask.exe",
+      "sha256": "eabe93fe2ebd5a406f37bbfd1b4d0f295a58a8d2be46de4c1f69fdcf9689761a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:47Z",
+      "last_checked": "2026-10-02T09:28:47Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asusosd.exe",
+      "sha256": "f1b419562702b054d0859ff3973917d0e0944eb0cb686e3480164ca64215a37d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:28:49Z",
+      "last_checked": "2026-10-02T09:28:49Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asusptpservice.exe",
+      "sha256": "1157950f280c0137796da4f1d75ea21809f5bb91b602b2ce47ce7d98c21ebc3a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:50Z",
+      "last_checked": "2026-10-02T09:28:50Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asussmartdisplaycontrol.exe",
+      "sha256": "b46a8ab616041510d7077d71c5bf9992e80c30c2d5930254c4875f6ea9df239b",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:52Z",
+      "last_checked": "2026-10-02T09:28:52Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "asussoftwaremanager.exe",
+      "sha256": "fa76db4cd7283c34922010233d069b3fa5d02b2a5514303eb34f24668a4fbb47",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:53Z",
+      "last_checked": "2026-10-02T09:28:53Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asussoftwaremanageragent.exe",
+      "sha256": "2be0e0ab201c28e3ae62062f17aa0619cf07a103024b58a772ee86f4222ec488",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:28:55Z",
+      "last_checked": "2026-10-02T09:28:55Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asusswitch.exe",
+      "sha256": "f1e08df75273a718bd09dac247c915f41af683d8d8092bb85a1646414b2e9841",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:56Z",
+      "last_checked": "2026-10-02T09:28:56Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asussystemanalysis.exe",
+      "sha256": "06d0e48f3d5d0f4a60e1ba89579769097a8c092fe2587ff0e5c2bca4ac57e6bd",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:28:58Z",
+      "last_checked": "2026-10-02T09:28:58Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "asussystemdiagnosis.exe",
+      "sha256": "722a8512c276b5b8c8e37757ed2afc65c9017a1c0dd3a589e4395aec4755291d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:00Z",
+      "last_checked": "2026-10-02T09:29:00Z",
       "hybrid_analysis": {
         "verdict": "no verdict"
       }
@@ -307,6 +725,25 @@
       },
       "first_verified": "2026-09-26T18:04:22Z",
       "last_checked": "2026-09-26T18:04:22Z"
+    },
+    {
+      "name": "browser_assistant.exe",
+      "sha256": "860a30aec360b6c78b0464889bb600f7ae57c9c8ea42d0c11c11593198e2e352",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:01Z",
+      "last_checked": "2026-10-02T09:29:01Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "chatgpt.exe",
@@ -460,6 +897,44 @@
       "last_checked": "2026-09-26T22:20:53Z"
     },
     {
+      "name": "crashpad_handler.exe",
+      "sha256": "43478fcfe67b36d521c069d0141101ba9439e882ef88bed6c885c7aa62a12fb2",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:03Z",
+      "last_checked": "2026-10-02T09:29:03Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "crossdeviceresume.exe",
+      "sha256": "ee815e569047677c4ac7487f461170dd445eb16362f7704cec39adabaf6873cd",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:04Z",
+      "last_checked": "2026-10-02T09:29:04Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "ctfmon.exe",
       "sha256": "59f7aeea55a06e9f09e9c6f1f39339bc71eeea7e47e4e6fb944c1392cc162864",
       "sources": [
@@ -506,6 +981,25 @@
     },
     {
       "name": "dax3api.exe",
+      "sha256": "51cae741387375378e9cf7ac90dde8c76f4d4de51c228735cc376df07d78617c",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:06Z",
+      "last_checked": "2026-10-02T09:29:06Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "dax3api.exe",
       "sha256": "826ca632320c8961f96e34d5d24a4ffcbd83223d131ca74ccd07580f970c080c",
       "sources": [
         "virustotal",
@@ -548,6 +1042,25 @@
       },
       "first_verified": "2026-09-27T13:19:45Z",
       "last_checked": "2026-09-27T13:19:45Z"
+    },
+    {
+      "name": "defendersessionhelper.exe",
+      "sha256": "1d5ed636d005799e7e1dfa145e9817bd08ba649b86d17dbaa26894f7e63be92d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:07Z",
+      "last_checked": "2026-10-02T09:29:07Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "devicecensus.exe",
@@ -745,6 +1258,25 @@
       "last_checked": "2026-09-26T18:04:45Z"
     },
     {
+      "name": "fdm.exe",
+      "sha256": "afe60b7dd2123ad271a356367951dba9b10f8b32b432f932215f707670af5647",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:10Z",
+      "last_checked": "2026-10-02T09:29:10Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "fing.exe",
       "sha256": "4de755a3365366bb47474e05dd821fcfad39e0f344e103d6d9e792b1509933bd",
       "sources": [
@@ -790,6 +1322,139 @@
       "last_checked": "2026-09-26T18:04:50Z"
     },
     {
+      "name": "fvcontainer.system.exe",
+      "sha256": "15aafa7ec38debed5086119597139e23ff4507d3e31d2ae2d6eb07d7f85c6902",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:12Z",
+      "last_checked": "2026-10-02T09:29:12Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "gameinputredistservice.exe",
+      "sha256": "1cd8e575f585de38d64b71b5a63a55ba4522d2f47e633091b660b81755db6b3b",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:13Z",
+      "last_checked": "2026-10-02T09:29:13Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "gameinputsvc.exe",
+      "sha256": "724a24aefd56321f4c2eb82b1049648596f7fa4380040c15e88a32ee91834853",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:29:15Z",
+      "last_checked": "2026-10-02T09:29:15Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "gamesdk.exe",
+      "sha256": "379c6e63c462f8efe07c1524889bd5397932cb74d89fdc278dcdf3d7c1053ed4",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:17Z",
+      "last_checked": "2026-10-02T09:29:17Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "gamingservices.exe",
+      "sha256": "a0991577dae8638a00a3c1fc2684e2b22e87957d79c1dcb2e365b15d4e55096f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:18Z",
+      "last_checked": "2026-10-02T09:29:18Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "gamingservicesnet.exe",
+      "sha256": "a0991577dae8638a00a3c1fc2684e2b22e87957d79c1dcb2e365b15d4e55096f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:18Z",
+      "last_checked": "2026-10-02T09:29:18Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "git-cmd.exe",
+      "sha256": "4bfcc107687b1f6c60ecfb43fdde792970f2e64f2701689f66409b3dc994751e",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:19Z",
+      "last_checked": "2026-10-02T09:29:19Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "git.exe",
       "sha256": "c39b1b4f7a57935bbeadf246dc2466316619453a6a9da77c4a9c6bd6d8fb21d3",
       "sources": [
@@ -809,6 +1474,82 @@
       }
     },
     {
+      "name": "glidexremoteservice.exe",
+      "sha256": "0ddce11861adaf2ad6e710315565e1087550a409e8cfebfe52973485e068ee14",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-02T09:29:21Z",
+      "last_checked": "2026-10-02T09:29:21Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "glidexservice.exe",
+      "sha256": "3aa3f7c9532062bbb2976ae7e2879ad19c8672f63085dd2de454344d5657dcd8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:22Z",
+      "last_checked": "2026-10-02T09:29:22Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "glidexserviceext.exe",
+      "sha256": "15bc4886f3b51679200290703a2118d6e539b446fc7080e29414ded27d75010f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:24Z",
+      "last_checked": "2026-10-02T09:29:24Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "googleplaygamesservices.exe",
+      "sha256": "4c78532286055e6c8f7b730c97d0ec155fd45b865f6c05ed89424a79412ae833",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-02T09:29:25Z",
+      "last_checked": "2026-10-02T09:29:25Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "grok bot.exe",
       "sha256": "7408a54d801ce5d2c0bc6ac564d66aa8948979b7867cc4432ca61a9eaa30cede",
       "sources": [
@@ -823,6 +1564,25 @@
       "last_checked": "2026-09-27T22:32:38Z",
       "maintainer_override": {
         "reason": "Owner's own application (Grok Bot); VT 1/68; owner-reviewed false positive"
+      }
+    },
+    {
+      "name": "helperservice.exe",
+      "sha256": "999899303f1ad347a2602538e5d8d44597edea9fd48e0e617563f13e52d7d3b5",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:27Z",
+      "last_checked": "2026-10-02T09:29:27Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
       }
     },
     {
@@ -1033,6 +1793,44 @@
       }
     },
     {
+      "name": "intel_pie_service.exe",
+      "sha256": "d9e09560f0b740089c375918213721d35df003bfdbcd97af7a9a4004cae9606b",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:28Z",
+      "last_checked": "2026-10-02T09:29:28Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "intelaudioservice.exe",
+      "sha256": "6f121e4b95c8f67523a637b2b89129b6ba98f4d4b732c7d805ab55cc305892fc",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:30Z",
+      "last_checked": "2026-10-02T09:29:30Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "intelaudioservice.exe",
       "sha256": "889ec2cbbbe9bd3d1f1e5ecd5dc1cdd8919c967aac8e0ff1d8b92a47f8fe25aa",
       "sources": [
@@ -1063,6 +1861,25 @@
       "last_checked": "2026-09-26T18:05:10Z"
     },
     {
+      "name": "intelcphdcpsvc.exe",
+      "sha256": "b823b1d870cd3bbbe9474c13975854e8cd31eb711a7b792fcc8f604230f71c4d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:32Z",
+      "last_checked": "2026-10-02T09:29:32Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "intelcphecisvc.exe",
       "sha256": "817ae854619014941ef0c05bdc07d01a358a250666981bbea6c4e585bf420966",
       "sources": [
@@ -1076,6 +1893,82 @@
       },
       "first_verified": "2026-09-26T18:05:12Z",
       "last_checked": "2026-09-26T18:05:12Z"
+    },
+    {
+      "name": "intelgraphicssoftware.service.exe",
+      "sha256": "07e2675f3fe54553948f499b844f2123bc2a369950edafe364b84c0312de6795",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:33Z",
+      "last_checked": "2026-10-02T09:29:33Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "ipf_helper.exe",
+      "sha256": "9483c2e183408be4ff1539275c4523a85e1327b75cecb998ff888284573f29de",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-02T09:29:35Z",
+      "last_checked": "2026-10-02T09:29:35Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "ipf_uf.exe",
+      "sha256": "5ceecbda713cbef63f901457e8e733e9ec1031f7747e05442f7e8b71d7aebf60",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:36Z",
+      "last_checked": "2026-10-02T09:29:36Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "jhi_service.exe",
+      "sha256": "4e30d1ed6bbd6c385a665d347342b72f84877589fe63d32268a68bda61ce55d4",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:38Z",
+      "last_checked": "2026-10-02T09:29:38Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
     },
     {
       "name": "jhi_service.exe",
@@ -1136,6 +2029,25 @@
       },
       "first_verified": "2026-09-26T18:05:15Z",
       "last_checked": "2026-09-26T18:05:15Z"
+    },
+    {
+      "name": "lightingservice.exe",
+      "sha256": "a711b9776ac0279256d22389478d44e3a51a1909c75a3bf03158cf9d5b91d3db",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:39Z",
+      "last_checked": "2026-10-02T09:29:39Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "litssvc.exe",
@@ -1244,6 +2156,25 @@
     },
     {
       "name": "malwarebytes.exe",
+      "sha256": "0fa80d9c0c5d4bb5e77eaedb556579faa07cd2b39775f8c415f08ad0cf9d98b7",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:41Z",
+      "last_checked": "2026-10-02T09:29:41Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "malwarebytes.exe",
       "sha256": "f668f511118090e7ab4ccdd32bf497dbb5fd5572d2bd1e1f94ba340024cad192",
       "sources": [
         "virustotal",
@@ -1256,6 +2187,25 @@
       },
       "first_verified": "2026-09-26T18:05:24Z",
       "last_checked": "2026-09-26T18:05:24Z"
+    },
+    {
+      "name": "mbambgnativemsg.exe",
+      "sha256": "470a0254bc323f229dfba24e3ab3eb0c23a3491f5acc4e90e45d8095cfdca639",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:42Z",
+      "last_checked": "2026-10-02T09:29:42Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "mbamservice.exe",
@@ -1271,6 +2221,25 @@
       },
       "first_verified": "2026-09-26T18:05:26Z",
       "last_checked": "2026-09-26T18:05:26Z"
+    },
+    {
+      "name": "mbamservice.exe",
+      "sha256": "fa349dff0252865682005baf19803ccb190a6f22e2c27e8f140a17d43d98bb73",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:44Z",
+      "last_checked": "2026-10-02T09:29:44Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "mbupdatr.exe",
@@ -1420,6 +2389,25 @@
       "last_checked": "2026-09-26T18:05:30Z"
     },
     {
+      "name": "mpdefendercoreservice.exe",
+      "sha256": "e185fe0598e3b23fa5b4a76b06e1983609857537849cb1ecef2f408bf41f06f6",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:45Z",
+      "last_checked": "2026-10-02T09:29:45Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "msedge.exe",
       "sha256": "f530bafcdb7e529bd21dd8be46e20c82b5c70fa0ffd770fe4c45a5c2c054c211",
       "sources": [
@@ -1448,6 +2436,44 @@
       },
       "first_verified": "2026-09-26T18:05:33Z",
       "last_checked": "2026-09-26T18:05:33Z"
+    },
+    {
+      "name": "msmpeng.exe",
+      "sha256": "7272962632224709cebd1e7f4560f99a068e513545b530ad7929a085b6a921aa",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:47Z",
+      "last_checked": "2026-10-02T09:29:47Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "msrdc.exe",
+      "sha256": "d0c166fa8f9ec91143117af9c32ea354e55f2d64f22d60c2d48036b3c5d1287f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:29:49Z",
+      "last_checked": "2026-10-02T09:29:49Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "netstat.exe",
@@ -1497,6 +2523,196 @@
       },
       "first_verified": "2026-09-26T21:57:35Z",
       "last_checked": "2026-09-26T21:57:35Z"
+    },
+    {
+      "name": "nissrv.exe",
+      "sha256": "644c5560d83234564a3e354bc97f2121b2b78adfaa32de8e5308a82332e3ddb8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 55
+      },
+      "first_verified": "2026-10-02T09:29:50Z",
+      "last_checked": "2026-10-02T09:29:50Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "notepad.exe",
+      "sha256": "03745e9e21684c0e6d9fdc50d91caa0935f4baf50f626c11987ab7d6991d58d1",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:52Z",
+      "last_checked": "2026-10-02T09:29:52Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "nvcontainer.exe",
+      "sha256": "7168361755ec552a77169a47eb7df5c4e3a13c63f7ccc43fade15abf19ef1c43",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:53Z",
+      "last_checked": "2026-10-02T09:29:53Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "nvdisplay.container.exe",
+      "sha256": "aa36a474ae549dc8e77e5ed7ce7fe632c027131eb5aabcd5ecccb0742b47d1e3",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:55Z",
+      "last_checked": "2026-10-02T09:29:55Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "nvfvsdksvc_x64.exe",
+      "sha256": "eabf1a9f0430c35d0804b63df25eabac50567e876bf286b9cabdf0763d1a5369",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:56Z",
+      "last_checked": "2026-10-02T09:29:56Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "nvidia overlay.exe",
+      "sha256": "9b77a23fb0ecb92e3e5cf05afd7a9b9cb46cad094ecf75430c9cd630f40a590a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:29:58Z",
+      "last_checked": "2026-10-02T09:29:58Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "nvrla.exe",
+      "sha256": "c200b445fe46136c148cc58970f0128c95c9d1c2643ecd317e3a9bd2a09f0da8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:29:59Z",
+      "last_checked": "2026-10-02T09:29:59Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "nvsphelper64.exe",
+      "sha256": "67c3df9bf95b4fd8b2b4d564bc4ac7fb6ef1c791fd93cec537dcf27606e3998d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:01Z",
+      "last_checked": "2026-10-02T09:30:01Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "ollama app.exe",
+      "sha256": "799df7ef274a62d1a1bf0137b1a5d24e0d78cfb07973b674b2f73ebd0ce706d2",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:04Z",
+      "last_checked": "2026-10-02T09:30:04Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "ollama.exe",
+      "sha256": "d571e4cf0ad4456fccd33d5b985b6d63ba5669c6e5a812391704083952aae3d5",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:06Z",
+      "last_checked": "2026-10-02T09:30:06Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "oneapp.igcc.winservice.exe",
@@ -1687,6 +2903,44 @@
       "last_checked": "2026-09-28T09:34:18Z"
     },
     {
+      "name": "presentmon_x64.exe",
+      "sha256": "25fcc45da599b13c434d022c57214972b9fd64608e4820c399f41d01fb1961ba",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:11Z",
+      "last_checked": "2026-10-02T09:30:11Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "presentmonservice.exe",
+      "sha256": "e91d289b3278203c9668f5690117fa5a20377c1ad7e252cca25618c3bd061072",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:30:12Z",
+      "last_checked": "2026-10-02T09:30:12Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "privacyiconclient.exe",
       "sha256": "870a1dd94a62b7e20989e31733386e4532cad9862cd53bcbb093b4091ff0563d",
       "sources": [
@@ -1715,6 +2969,25 @@
       },
       "first_verified": "2026-09-26T21:57:36Z",
       "last_checked": "2026-09-26T21:57:36Z"
+    },
+    {
+      "name": "rainmeter.exe",
+      "sha256": "802a3ba088ec8c59b4f645cd317b7a755986c9c5a1f86c67bce5efbc77e97b47",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:14Z",
+      "last_checked": "2026-10-02T09:30:14Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "ravbg64.exe",
@@ -1777,6 +3050,25 @@
       "last_checked": "2026-09-26T18:05:52Z"
     },
     {
+      "name": "rogliveservice.exe",
+      "sha256": "8a25e4960f0438b8ea8445015f64ceca833786bd9e7e7856e1ca97e819baf38f",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:30:15Z",
+      "last_checked": "2026-10-02T09:30:15Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "rtkaudioservice64.exe",
       "sha256": "9139994e0637d87862eb61f63ca1e48b9fc3f544c9927676b94f79cbfa64c98d",
       "sources": [
@@ -1790,6 +3082,25 @@
       },
       "first_verified": "2026-09-26T18:05:54Z",
       "last_checked": "2026-09-26T18:05:54Z"
+    },
+    {
+      "name": "rtkauduservice64.exe",
+      "sha256": "a6f867c39410c0d80a035282c9e66157a6ffd74a0c81279a36be443baa8f1536",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:17Z",
+      "last_checked": "2026-10-02T09:30:17Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "runtimebroker.exe",
@@ -2267,6 +3578,25 @@
       "last_checked": "2026-09-26T18:06:30Z"
     },
     {
+      "name": "systemsettingsadminflows.exe",
+      "sha256": "e2b8d6cfc9316fa66afdac36546774c10ea867f4c3264332ea469b1a8328e5ea",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:20Z",
+      "last_checked": "2026-10-02T09:30:20Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "tabtip.exe",
       "sha256": "1cdac8e17a8e2a5d7c396228b28d7c3b274a0cabe19deb743358d8d0fefd7e75",
       "sources": [
@@ -2591,6 +3921,25 @@
     },
     {
       "name": "updater.exe",
+      "sha256": "7c1d5a7c67116734619b3a1a05ca1d2777c83256e2a1bb2fdfbcfac4d0178b44",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:22Z",
+      "last_checked": "2026-10-02T09:30:22Z",
+      "hybrid_analysis": {
+        "verdict": "whitelisted"
+      }
+    },
+    {
+      "name": "updater.exe",
       "sha256": "b676c1145f17a9c3d74cc66ad2708550698f1e6a789e37b1715e32cf0127bfdc",
       "sources": [
         "virustotal",
@@ -2667,6 +4016,44 @@
       "last_checked": "2026-09-26T18:06:55Z"
     },
     {
+      "name": "vmcompute.exe",
+      "sha256": "31384cce038d322264dcc96a333ffc47ffa8e32a7672d6e9d2c85db03bff95c3",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-02T09:30:23Z",
+      "last_checked": "2026-10-02T09:30:23Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "vmwp.exe",
+      "sha256": "cbec9d650b1835561058b19e8b1ece6b4e1a830b78cf1feaae0134a8dd1613a1",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:25Z",
+      "last_checked": "2026-10-02T09:30:25Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "vssvc.exe",
       "sha256": "7f38c0c54279f69e0f278687db6f186d4a55b4c81bd7a3c583f6e47585c2ffea",
       "sources": [
@@ -2697,6 +4084,44 @@
       "last_checked": "2026-09-27T14:32:16Z"
     },
     {
+      "name": "windhawk.exe",
+      "sha256": "52db87dee0160a13cf51e31bee6320da09767582f1f359f8cf9a787d1228bf44",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:26Z",
+      "last_checked": "2026-10-02T09:30:26Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "wininit.exe",
+      "sha256": "4a27dc3651ec1068dcda1c67b6adb41d85b929e7b26a2fdda38071fc227de464",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-10-02T09:30:28Z",
+      "last_checked": "2026-10-02T09:30:28Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "wininit.exe",
       "sha256": "fbdb5f31fec3685e7437418bb981319004d24933c0ad5b0667519cc9fd65dd24",
       "sources": [
@@ -2710,6 +4135,25 @@
       },
       "first_verified": "2026-09-26T18:06:56Z",
       "last_checked": "2026-09-26T18:06:56Z"
+    },
+    {
+      "name": "winrar.exe",
+      "sha256": "f49bce960c454be5491e9b256046462ce6f7b2473e59bc042e543b15cd876320",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:30Z",
+      "last_checked": "2026-10-02T09:30:30Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "wlanext.exe",
@@ -2788,6 +4232,25 @@
     },
     {
       "name": "wsl.exe",
+      "sha256": "68d4a016ef8837d2362c7df1ee0a0fb1246b63dca2b712ff10384bcf02e85dee",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:31Z",
+      "last_checked": "2026-10-02T09:30:31Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "wsl.exe",
       "sha256": "d81dfc0236fa3ca297d6745c3475b25a3b7fea17aa109c95b646edb13a31322a",
       "sources": [
         "virustotal",
@@ -2800,6 +4263,63 @@
       },
       "first_verified": "2026-09-28T09:34:22Z",
       "last_checked": "2026-09-28T09:34:22Z"
+    },
+    {
+      "name": "wslhost.exe",
+      "sha256": "a7ab843565ca7508f097f337b54f090b49306a72c711feec5a7a9441567c4ebd",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T09:30:33Z",
+      "last_checked": "2026-10-02T09:30:33Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "wslrelay.exe",
+      "sha256": "e1f9c2167e562bb7741cf480ab5ce9710eef7aaeca4d3b081f379cf8cfb25222",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:34Z",
+      "last_checked": "2026-10-02T09:30:34Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "wslservice.exe",
+      "sha256": "29b28ac8f9812072c4e7ca2f26e69dff1f9f90adf5deab49dc4173729ffc71c3",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:36Z",
+      "last_checked": "2026-10-02T09:30:36Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
     },
     {
       "name": "wslservice.exe",
@@ -2845,6 +4365,25 @@
       },
       "first_verified": "2026-09-26T18:07:07Z",
       "last_checked": "2026-09-26T18:07:07Z"
+    },
+    {
+      "name": "xmousebuttoncontrol.exe",
+      "sha256": "7cc348f8d2ee10264e136425059205cf2c17493b4f3f6a43af024aecb926d8c8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T09:30:37Z",
+      "last_checked": "2026-10-02T09:30:37Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
     }
   ]
 }

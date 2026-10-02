@@ -11,4 +11,3 @@ sppsvc.exe
 systemsettingsbroker.exe
 lenovovantage-(genericmessagingaddin).exe
 notepad++.exe
-winrar.exe
