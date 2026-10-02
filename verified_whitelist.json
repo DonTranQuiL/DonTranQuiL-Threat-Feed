@@ -3430,6 +3430,25 @@
       "last_checked": "2026-09-26T18:06:18Z"
     },
     {
+      "name": "spatialaudiolicensesrv.exe",
+      "sha256": "22b1faffaf257c9a5a115bd05d901450d1d3a010725de3be386b8e5b90f2b6f6",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T18:51:44Z",
+      "last_checked": "2026-10-02T18:51:44Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "srtasks.exe",
       "sha256": "693105226758b0e608db6679985f4cb96d2eea050cdf1924d33838534e608639",
       "sources": [
@@ -4033,6 +4052,25 @@
       },
       "first_verified": "2026-09-26T18:06:55Z",
       "last_checked": "2026-09-26T18:06:55Z"
+    },
+    {
+      "name": "vdsldr.exe",
+      "sha256": "a7e34656e8bd60f80b33c1553056f79d0195240326d320a1ddc3dbaaa29269b4",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T18:51:46Z",
+      "last_checked": "2026-10-02T18:51:46Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
     },
     {
       "name": "vmcompute.exe",
