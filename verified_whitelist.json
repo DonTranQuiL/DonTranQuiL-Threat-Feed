@@ -690,6 +690,25 @@
       }
     },
     {
+      "name": "asusupdatechecker.exe",
+      "sha256": "d502770b956d89df52f9c9fcb9f6d5518667501782d45ba10df8b53e18ece6f4",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-02T22:43:45Z",
+      "last_checked": "2026-10-02T22:43:45Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "atud.exe",
       "sha256": "e65176daf61231646acc8645d73ca447b48896f2dbd87fdc381fd6cb2ad8ffc7",
       "sources": [
