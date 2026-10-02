@@ -17,4 +17,5 @@ odin3_v3.14.4.exe|aa17ccf37d52c816bcea6e54dbdd6daf90fe2ac984641d01034ade77ff9dcb
 paragon_service.exe|9ac969289dceb707d5a0fa20a8e72fdfc16b5116f638d064c8069b952a2d8bf9|hard_reject|VT 0/71 malicious; Hybrid Analysis: whitelist hash verdict malicious (1 report(s)): (hash)
 powershell.exe|0ff6f2c94bc7e2833a5f7e16de1622e5dba70396f31c7d5f56381870317e8c46|hard_reject|VT 0/71 malicious; high-risk executable cannot be promoted to whitelist, even pinned to a SHA-256: 'powershell.exe'
 rundll32.exe|2f2321d2a3eeec2cdd7d921645c121bed75872435926ee97f3d53e7ee7662bf0|hard_reject|VT 0/71 malicious; high-risk executable cannot be promoted to whitelist, even pinned to a SHA-256: 'rundll32.exe'
+softwareupdate.exe|0682eef4ae722d6dad6b0c41f530d86e44f094f8487105372d5a03e0f0a437e9|hard_reject|Hybrid Analysis: whitelist hash verdict malicious (2 report(s)): (hash)
 ss_conn_service2.exe|ad20bdfb11acd97dd10a17a637c477160184dfe828f00724fc1f396fd3109e80|review|VT 1/71 malicious; VirusTotal: whitelist hash has 1 malicious detections: (hash); whitelist hash (hash) is unknown to every reputation provider that can vouch for it (CIRCL hashlookup, VirusTotal with
