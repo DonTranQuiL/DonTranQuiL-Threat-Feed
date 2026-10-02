@@ -212,6 +212,25 @@
       "last_checked": "2026-09-26T18:04:12Z"
     },
     {
+      "name": "am_delta_patch_1.459.498.0.exe",
+      "sha256": "34ccafc207c2123946dac20dd2e47f525d1b0cba367d664a6e83e5127cea04d8",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T20:26:11Z",
+      "last_checked": "2026-10-02T20:26:11Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "applemobiledeviceservice.exe",
       "sha256": "59b363272fc262ee0bd3c830d065bd934a0a81a8b03b1922b9f93b60076f7947",
       "sources": [
@@ -2427,6 +2446,21 @@
       }
     },
     {
+      "name": "mpsigstub.exe",
+      "sha256": "071b0d3a08503a8b88aeeda1d20f371a563377028f6e252dc66cce60ab8f823e",
+      "sources": [
+        "circl",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": null,
+      "first_verified": "2026-10-02T20:26:13Z",
+      "last_checked": "2026-10-02T20:26:13Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "msedge.exe",
       "sha256": "f530bafcdb7e529bd21dd8be46e20c82b5c70fa0ffd770fe4c45a5c2c054c211",
       "sources": [
@@ -4426,6 +4460,25 @@
       },
       "first_verified": "2026-09-26T18:07:06Z",
       "last_checked": "2026-09-26T18:07:06Z"
+    },
+    {
+      "name": "wuaucltcore.exe",
+      "sha256": "78e4e6e9dd68d01cc94ed9be8e4ff03285f619b58565c6252755242e40002df7",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-02T20:26:14Z",
+      "last_checked": "2026-10-02T20:26:14Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "wudfhost.exe",
