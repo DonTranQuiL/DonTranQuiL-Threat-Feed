@@ -3378,6 +3378,25 @@
       }
     },
     {
+      "name": "setup.exe",
+      "sha256": "c8152486d7393d9a036fdad7996455ef1002006f101d99ad4775e4e97d87f820",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T04:55:45Z",
+      "last_checked": "2026-10-03T04:55:45Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "shellexperiencehost.exe",
       "sha256": "99c8b84f2247192b857cbd80e1286dd0d4b807a5e40398414174b7cb93f93430",
       "sources": [
