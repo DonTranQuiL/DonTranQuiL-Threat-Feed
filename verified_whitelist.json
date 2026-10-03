@@ -1417,6 +1417,25 @@
       "last_checked": "2026-09-26T18:04:50Z"
     },
     {
+      "name": "fvcontainer.exe",
+      "sha256": "b61762efeb9ec3dc85eb3e3590966a0eb581903646a857792c2b00bc92aa7b8a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T12:43:47Z",
+      "last_checked": "2026-10-03T12:43:47Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "fvcontainer.system.exe",
       "sha256": "15aafa7ec38debed5086119597139e23ff4507d3e31d2ae2d6eb07d7f85c6902",
       "sources": [
@@ -4199,6 +4218,25 @@
       },
       "first_verified": "2026-09-26T18:06:51Z",
       "last_checked": "2026-09-26T18:06:51Z"
+    },
+    {
+      "name": "updatecheck.exe",
+      "sha256": "ba88f16bc7eedc0d00269fb13909e9354f606670710b876cef8b5d462f8f7678",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T12:43:49Z",
+      "last_checked": "2026-10-03T12:43:49Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "updater.exe",
