@@ -2401,6 +2401,25 @@
       }
     },
     {
+      "name": "microsoftedge_x64_154.0.4258.53_154.0.4258.48.exe",
+      "sha256": "e9aa5e6adaa55f5fdb7ae8fcf43130bb234f0ef158ee2aca3fa04365077a2fb1",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T04:18:16Z",
+      "last_checked": "2026-10-03T04:18:16Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "microsoftedgeupdate.exe",
       "sha256": "5497dd84321887d18b62fae35689ea4a7d07cad7840853b2bb50bbf7bfac365e",
       "sources": [
