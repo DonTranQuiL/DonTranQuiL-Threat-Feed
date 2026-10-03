@@ -1353,6 +1353,25 @@
       }
     },
     {
+      "name": "fileoperator.exe",
+      "sha256": "40069c3927f4b563654da844d1c97d181f93017cad047a9e7e87567fbf0acd3a",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-03T12:36:51Z",
+      "last_checked": "2026-10-03T12:36:51Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "fing.exe",
       "sha256": "4de755a3365366bb47474e05dd821fcfad39e0f344e103d6d9e792b1509933bd",
       "sources": [
@@ -2169,6 +2188,25 @@
       },
       "first_verified": "2026-09-26T18:05:20Z",
       "last_checked": "2026-09-26T18:05:20Z"
+    },
+    {
+      "name": "lockapp.exe",
+      "sha256": "4b554ee89d50c6ad0b8c9b37233f96d50fed5e9cc7df541e45441dd26f7c2740",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-10-03T12:36:52Z",
+      "last_checked": "2026-10-03T12:36:52Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
     },
     {
       "name": "logonui.exe",
@@ -3168,6 +3206,44 @@
       "last_checked": "2026-09-26T18:05:49Z"
     },
     {
+      "name": "rdpclip.exe",
+      "sha256": "d1f36285c6275dafb634b82a4479a5403f128f3a1736fa2ca75f65053c802b91",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 67
+      },
+      "first_verified": "2026-10-03T12:36:54Z",
+      "last_checked": "2026-10-03T12:36:54Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "rdpinput.exe",
+      "sha256": "ffff79323b442b4f69e1b2ea38ed69391f4a2e8b450962d10ee4d868b885822c",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-10-03T12:36:56Z",
+      "last_checked": "2026-10-03T12:36:56Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "robloxcrashhandler.exe",
       "sha256": "7c1b52430973069e91f32c7c32ea6b60e791e0b29203bf3d12e5a1e6c1b17976",
       "sources": [
@@ -3952,6 +4028,25 @@
       "last_checked": "2026-09-26T18:06:46Z"
     },
     {
+      "name": "tstheme.exe",
+      "sha256": "fda3e9d3e468ccb7303085d77fd7b927eecef4758ad8f6cc3e94ab9fb7b544ec",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 68
+      },
+      "first_verified": "2026-10-03T12:36:59Z",
+      "last_checked": "2026-10-03T12:36:59Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "tvsu.exe",
       "sha256": "13e9bb6b088d76f7c85cd9bc75f624604cfd540e210e1ef736e36a38ef390003",
       "sources": [
@@ -4341,6 +4436,25 @@
       },
       "first_verified": "2026-10-03T08:22:43Z",
       "last_checked": "2026-10-03T08:22:43Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "winget.exe",
+      "sha256": "ce0bb2b4871cb7f41f40d34ad47e8414a426dc5f6a303c14cee335a71d8602ed",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 58
+      },
+      "first_verified": "2026-10-03T12:37:00Z",
+      "last_checked": "2026-10-03T12:37:00Z",
       "hybrid_analysis": {
         "verdict": "no verdict"
       }

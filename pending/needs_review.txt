@@ -22,3 +22,5 @@ putty.exe|4119bec97bcf2a736f7769d22dc745d8a398a278bd403e53ec2dd2dd0217a6ae|revie
 rundll32.exe|2f2321d2a3eeec2cdd7d921645c121bed75872435926ee97f3d53e7ee7662bf0|hard_reject|VT 0/71 malicious; high-risk executable cannot be promoted to whitelist, even pinned to a SHA-256: 'rundll32.exe'
 softwareupdate.exe|0682eef4ae722d6dad6b0c41f530d86e44f094f8487105372d5a03e0f0a437e9|hard_reject|Hybrid Analysis: whitelist hash verdict malicious (2 report(s)): (hash)
 ss_conn_service2.exe|ad20bdfb11acd97dd10a17a637c477160184dfe828f00724fc1f396fd3109e80|review|VT 1/71 malicious; VirusTotal: whitelist hash has 1 malicious detections: (hash); whitelist hash (hash) is unknown to every reputation provider that can vouch for it (CIRCL hashlookup, VirusTotal with
+storedesktopextension.exe|588f614a66b11820b30513c0bff5b5d3e73c05ecff8509da259d4593e53166ab|review|VT 0/71 malicious; Hybrid Analysis: whitelist hash verdict suspicious (1 report(s)); manual review required: (hash)
+winstore.app.exe|588f614a66b11820b30513c0bff5b5d3e73c05ecff8509da259d4593e53166ab|review|VT 0/71 malicious; Hybrid Analysis: whitelist hash verdict suspicious (1 report(s)); manual review required: (hash)
