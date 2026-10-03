@@ -633,6 +633,25 @@
       }
     },
     {
+      "name": "asussurvey.exe",
+      "sha256": "f55b4107ea5bea58e01d8f9fc893d5f13d3e90c412e375aa4a54a24e14cb5417",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 72
+      },
+      "first_verified": "2026-10-03T08:22:38Z",
+      "last_checked": "2026-10-03T08:22:38Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "asusswitch.exe",
       "sha256": "f1e08df75273a718bd09dac247c915f41af683d8d8092bb85a1646414b2e9841",
       "sources": [
@@ -2465,6 +2484,25 @@
       "last_checked": "2026-09-26T18:05:30Z"
     },
     {
+      "name": "mpcmdrun.exe",
+      "sha256": "540bb6e0b6596cdc636cfb83aca6c462282a5770d6b3044cc49ef06414f1d5fb",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T08:22:39Z",
+      "last_checked": "2026-10-03T08:22:39Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "mpdefendercoreservice.exe",
       "sha256": "e185fe0598e3b23fa5b4a76b06e1983609857537849cb1ecef2f408bf41f06f6",
       "sources": [
@@ -4286,6 +4324,25 @@
       "last_checked": "2026-10-02T09:30:26Z",
       "hybrid_analysis": {
         "verdict": "no specific threat"
+      }
+    },
+    {
+      "name": "windowspackagemanagerserver.exe",
+      "sha256": "fd2f533a9f40bfe4f7fd59d15c7b5734c76746bbe6dcedaa878c441ba544e0b5",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T08:22:43Z",
+      "last_checked": "2026-10-03T08:22:43Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
       }
     },
     {
