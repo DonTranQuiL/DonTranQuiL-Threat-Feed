@@ -2896,6 +2896,25 @@
       "last_checked": "2026-09-28T09:34:15Z"
     },
     {
+      "name": "opera_autoupdate.exe",
+      "sha256": "bb2808ef3e626d3271b4714060280904cb27ebe5d09895142731b247f686979d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 69
+      },
+      "first_verified": "2026-10-03T07:25:54Z",
+      "last_checked": "2026-10-03T07:25:54Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "opera_crashreporter.exe",
       "sha256": "2d42cf92d7cca0e2214a45ed657ac79d325e601d0bec8d2d2a045f24214b1b8f",
       "sources": [
