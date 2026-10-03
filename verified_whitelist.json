@@ -803,6 +803,25 @@
       "last_checked": "2026-09-26T18:04:22Z"
     },
     {
+      "name": "bitwarden.exe",
+      "sha256": "ed370275cfeb8354d491b2dc9540fbb38b5a9d27fbb5e0ce9c2f2061d6383882",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-03T17:47:55Z",
+      "last_checked": "2026-10-03T17:47:55Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
+    },
+    {
       "name": "browser_assistant.exe",
       "sha256": "860a30aec360b6c78b0464889bb600f7ae57c9c8ea42d0c11c11593198e2e352",
       "sources": [
