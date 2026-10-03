@@ -4460,6 +4460,25 @@
       "last_checked": "2026-09-27T14:32:16Z"
     },
     {
+      "name": "werfault.exe",
+      "sha256": "fe1adfc3007f938ad75741761421a4cf03935ae00776f6897516e382bd493fd7",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-03T18:14:11Z",
+      "last_checked": "2026-10-03T18:14:11Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "windhawk.exe",
       "sha256": "52db87dee0160a13cf51e31bee6320da09767582f1f359f8cf9a787d1228bf44",
       "sources": [
