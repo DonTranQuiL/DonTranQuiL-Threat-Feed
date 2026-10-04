@@ -1357,6 +1357,25 @@
       "last_checked": "2026-09-26T18:04:44Z"
     },
     {
+      "name": "exodus.exe",
+      "sha256": "ecd307f2bf0723aa6025c155506ce7082c6179af834893ebfbe6f6475e535af7",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 67
+      },
+      "first_verified": "2026-10-04T17:57:56Z",
+      "last_checked": "2026-10-04T17:57:56Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
+    },
+    {
       "name": "ext2srv.exe",
       "sha256": "73127f954ae8bfa1034ddbe46de4f4f20466270eabc51f4479672895acd2bde7",
       "sources": [
