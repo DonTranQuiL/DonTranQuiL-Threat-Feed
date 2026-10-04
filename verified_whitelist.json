@@ -4040,6 +4040,25 @@
       "last_checked": "2026-09-26T18:06:41Z"
     },
     {
+      "name": "tor.exe",
+      "sha256": "ea61ba0ed5b89d0622d2894b2a86f5ff34ce9b48e6e40d64341e7c0c7ee03e08",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-04T13:26:16Z",
+      "last_checked": "2026-10-04T13:26:16Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "tphkload.exe",
       "sha256": "f034f2a18edbe76d042fa3d0a78868c820d68a30c08c53017265b7f030390ab8",
       "sources": [
