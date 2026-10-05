@@ -78,6 +78,25 @@
       }
     },
     {
+      "name": "154.0.8037.98_chrome_installer_uncompressed.exe",
+      "sha256": "2d5f2073185cdf8e72bd70b19970bcb2e1ade19a85d68b6be2a3fe672816941d",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 65
+      },
+      "first_verified": "2026-10-05T22:59:09Z",
+      "last_checked": "2026-10-05T22:59:09Z",
+      "hybrid_analysis": {
+        "verdict": "not found"
+      }
+    },
+    {
       "name": "3uairplayer.exe",
       "sha256": "502d2e0b97607b42f4236cf9235e0a206d5f6c7b22228c651dfa41deb128d4de",
       "sources": [
