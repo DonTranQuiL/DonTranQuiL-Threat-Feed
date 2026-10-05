@@ -3320,6 +3320,25 @@
       }
     },
     {
+      "name": "reg.exe",
+      "sha256": "ef37663b44ac66920c6f33694deea01acb78ae3f3012884819373fa04c3eb5f0",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-05T14:31:37Z",
+      "last_checked": "2026-10-05T14:31:37Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "robloxcrashhandler.exe",
       "sha256": "7c1b52430973069e91f32c7c32ea6b60e791e0b29203bf3d12e5a1e6c1b17976",
       "sources": [
