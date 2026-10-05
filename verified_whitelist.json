@@ -4665,6 +4665,25 @@
       }
     },
     {
+      "name": "winscp.exe",
+      "sha256": "cf948eaf8429c582636953e8b6b82097c8bb0a55111ec57e5f890e27dbab70d9",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 70
+      },
+      "first_verified": "2026-10-05T18:01:42Z",
+      "last_checked": "2026-10-05T18:01:42Z",
+      "hybrid_analysis": {
+        "verdict": "no specific threat"
+      }
+    },
+    {
       "name": "wlanext.exe",
       "sha256": "bc9132aebf45df98a46a8a3c38fba98b1c364c22f8f2855081cc60256fb6d499",
       "sources": [
