@@ -1,6 +1,7 @@
 # DonTranQuiL-Threat-Feed
 
 Shared threat feed configuration for DonTranQuiL projects.
+This is a part of DonTranQuiL Sentinel - Virus/malware protection. 
 
 ## Files
 
