@@ -1626,6 +1626,44 @@
       }
     },
     {
+      "name": "geminiapplauncher.exe",
+      "sha256": "ac1134c9731d66b01db825daa5484b3188e8f47a0cb3db90d2cb480504952bed",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-20T18:32:31Z",
+      "last_checked": "2026-10-20T18:32:31Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
+      "name": "geminicrashpadhandler.exe",
+      "sha256": "2f747362fa31920b378faef58becaa58411a4b6ef816b3a7393989817c251539",
+      "sources": [
+        "virustotal",
+        "hybridanalysis",
+        "malwarebazaar"
+      ],
+      "virustotal": {
+        "malicious": 0,
+        "suspicious": 0,
+        "engines": 71
+      },
+      "first_verified": "2026-10-20T18:32:33Z",
+      "last_checked": "2026-10-20T18:32:33Z",
+      "hybrid_analysis": {
+        "verdict": "no verdict"
+      }
+    },
+    {
       "name": "git-cmd.exe",
       "sha256": "4bfcc107687b1f6c60ecfb43fdde792970f2e64f2701689f66409b3dc994751e",
       "sources": [
